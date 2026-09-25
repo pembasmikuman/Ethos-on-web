@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { kv } from '../db/kv';
 import type { Exercise } from '../db';
 import { deleteSession, finishSession, insertSet, recentExerciseSessions, routineExercises, startSession, type LoggedSet, type Routine, setExerciseNotes } from '../db/queries';
 import { nextWeight, stalled, warmupRamp } from '../lib/progression';
@@ -59,7 +61,8 @@ async function buildBlock(ex: Exercise, targetSets: number): Promise<ExerciseBlo
   };
 }
 
-let seq = 0;
+// Starts at the clock so drafts restored after a reload keep their ids and new ones land above them.
+let seq = Date.now();
 const emptySet = (weight: string, type: 'warmup' | 'working' = 'working'): SetDraft => ({ id: ++seq, type, weight, reps: '', rir: '', done: false });
 
 /** Store the push id once the server answers, unless the rest it belongs to has already changed. */
@@ -68,7 +71,9 @@ function attachNotif(endsAt: number, notifId: string | null): void {
   if (r && r.endsAt === endsAt) useWorkout.setState({ rest: { ...r, notifId } });
 }
 
-export const useWorkout = create<State>((set, get) => ({
+export const useWorkout = create<State>()(
+  persist(
+    (set, get) => ({
   sessionId: null,
   routine: null,
   title: '',
@@ -228,4 +233,11 @@ export const useWorkout = create<State>((set, get) => ({
     set({ sessionId: null, routine: null, blocks: [], rest: null });
     return sessionId;
   },
-}));
+}),
+    {
+      name: 'workout',
+      storage: createJSONStorage(() => ({ getItem: kv.get, setItem: kv.set, removeItem: kv.del })),
+      partialize: (s) => ({ sessionId: s.sessionId, routine: s.routine, title: s.title, startedAt: s.startedAt, blocks: s.blocks, exIdx: s.exIdx, focus: s.focus, rest: s.rest }),
+    },
+  ),
+);
