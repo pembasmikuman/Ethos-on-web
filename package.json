@@ -7,6 +7,7 @@
     "build": "vite build",
     "check": "tsc --noEmit && tsc --noEmit -p worker",
     "test": "bun test src worker",
+    "e2e": "sh scripts/e2e.sh",
     "deploy": "vite build && wrangler deploy --var VAPID_PUBLIC_KEY:$VITE_VAPID_PUBLIC_KEY"
   },
   "dependencies": {
@@ -17,6 +18,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260925.1",
+    "@playwright/test": "^1.63.0",
     "@types/bun": "^1.4.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
