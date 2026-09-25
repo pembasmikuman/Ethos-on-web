@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import './styles.css';
 import { ROUTES } from './routes';
 import { matchRoute, router, ScreenContext, TAB_ROOT, useNav, type Tab } from './lib/nav';
@@ -8,6 +8,7 @@ import { useWorkout } from './store/workout';
 import { useWakeLock } from './lib/wakeLock';
 import { useRestAlarm } from './lib/restAlarm';
 import { unlockAudio } from './lib/bell';
+import { useEdgeSwipe, useSlides } from './lib/slide';
 
 export function App() {
   const nav = useNav();
@@ -31,18 +32,31 @@ export function App() {
   // A workout that ended outside its own screens (restore, relaunch after finishing) takes its tab with it.
   const hasWorkout = useWorkout((s) => s.sessionId !== null || s.routine !== null);
   useEffect(() => { if (!hasWorkout) router.clearLog(); }, [hasWorkout]);
+
+  const box = useRef<HTMLDivElement>(null);
+  const m = nav.move;
+  const topK = nav.stacks[nav.tab].at(-1)!.k;
+  useSlides(box, m, topK);
+  useEdgeSwipe(box);
+  // A screen that was just popped stays on the page, in its old place, while it slides away.
+  const tabs = Object.keys(TAB_ROOT) as Tab[];
+  const ghost = m?.kind === 'pop' && !tabs.some((tab) => nav.stacks[tab].some((e) => e.k === m.from.k)) ? m.from : null;
   return (
-    <div style={{ height: 'var(--app-h, 100dvh)', background: t.bg }}>
-      {(Object.keys(TAB_ROOT) as Tab[]).flatMap((tab) =>
-        nav.stacks[tab].map((e, i, st) => <ScreenHost key={e.k} href={e.href} visible={tab === nav.tab && i === st.length - 1} />),
+    <div ref={box} style={{ height: 'var(--app-h, 100dvh)', background: t.bg, overflow: 'hidden' }}>
+      {tabs.flatMap((tab) =>
+        [...nav.stacks[tab], ...(ghost && m!.fromTab === tab ? [ghost] : [])].map((e) => {
+          const top = e.k === topK, from = e.k === m?.from.k;
+          return <ScreenHost key={e.k} k={e.k} href={e.href} shown={top || from} focused={top} layer={from && m!.kind === 'pop' ? 2 : top ? 1 : 0} />;
+        }),
       )}
       <Dock />
     </div>
   );
 }
 
-/** One mounted screen. Hidden ones keep their layout (so their scroll position) but can't be seen, tapped or focused. */
-const ScreenHost = memo(function ScreenHost({ href, visible }: { href: string; visible: boolean }) {
+/** One mounted screen. Hidden ones keep their layout (so their scroll position) but can't be seen, tapped or focused.
+ *  During a slide the screen underneath is shown too, but only the top one is focused. */
+const ScreenHost = memo(function ScreenHost({ k, href, shown, focused, layer }: { k: number; href: string; shown: boolean; focused: boolean; layer: number }) {
   const [path, search = ''] = href.split('?');
   const found = useMemo(() => {
     for (const [pattern, C] of ROUTES) {
@@ -51,12 +65,18 @@ const ScreenHost = memo(function ScreenHost({ href, visible }: { href: string; v
     }
     return null;
   }, [path, search]);
-  const ctx = useMemo(() => ({ params: found?.params ?? {}, focused: visible }), [found, visible]);
+  const ctx = useMemo(() => ({ params: found?.params ?? {}, focused }), [found, focused]);
   return (
     <div
-      data-screen={visible ? 'top' : undefined}
-      inert={!visible}
-      style={{ position: 'absolute', inset: 0, visibility: visible ? 'visible' : 'hidden', pointerEvents: visible ? undefined : 'none' }}
+      data-k={k}
+      data-screen={focused ? 'top' : undefined}
+      inert={!focused}
+      style={{
+        position: 'absolute', inset: 0, zIndex: layer, background: 'var(--bg)',
+        // Off screen while at rest; shows along the left edge while sliding.
+        boxShadow: '-12px 0 32px rgba(0,0,0,0.14)',
+        visibility: shown ? 'visible' : 'hidden', pointerEvents: focused ? undefined : 'none',
+      }}
     >
       <ScreenContext value={ctx}>{found ? <found.C /> : <p style={{ color: 'var(--mute)', padding: 24 }}>Not found</p>}</ScreenContext>
     </div>

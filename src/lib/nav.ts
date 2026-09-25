@@ -6,7 +6,9 @@ import { createContext, useContext, useEffect, useSyncExternalStore, type Effect
 
 export type Tab = 'home' | 'history' | 'log' | 'exercises' | 'settings';
 export type Entry = { k: number; href: string };
-type Nav = { tab: Tab; stacks: Record<Tab, Entry[]> };
+/** The last screen change, for the slide: 'push' slides the new screen in over `from`, 'pop' slides `from` away. */
+export type Move = { kind: 'push' | 'pop'; from: Entry; fromTab: Tab };
+type Nav = { tab: Tab; stacks: Record<Tab, Entry[]>; move: Move | null };
 
 export const TAB_ROOT: Record<Tab, string> = { home: '/', history: '/history', log: '/session', exercises: '/exercises', settings: '/settings' };
 const TABS = Object.keys(TAB_ROOT) as Tab[];
@@ -20,14 +22,18 @@ const owner = (path: string): Tab | undefined => rootTab(path) ?? (LOG_ONLY.incl
 let seq = 0;
 const entry = (href: string): Entry => ({ k: ++seq, href });
 const empty = (): Record<Tab, Entry[]> => ({ home: [], history: [], log: [], exercises: [], settings: [] });
-let nav: Nav = { tab: 'home', stacks: { ...empty(), home: [entry('/')] } };
+let nav: Nav = { tab: 'home', stacks: { ...empty(), home: [entry('/')] }, move: null };
 
 const listeners = new Set<() => void>();
-function commit(next: Nav) {
-  nav = next;
+const topOf = (n: Pick<Nav, 'tab' | 'stacks'>) => n.stacks[n.tab].at(-1)!;
+const emit = () => { for (const l of listeners) l(); };
+/** Apply a change. `kind` says how it slides; none for tab switches, replaces and resets. */
+function commit(next: Pick<Nav, 'tab' | 'stacks'>, kind: Move['kind'] | null = null) {
+  const from = topOf(nav);
+  nav = { ...next, move: kind && topOf(next).k !== from.k ? { kind, from, fromTab: nav.tab } : null };
   const top = next.stacks[next.tab].at(-1)!.href;
   if (typeof history !== 'undefined' && location.pathname + location.search !== top) history.replaceState(null, '', top);
-  for (const l of listeners) l();
+  emit();
 }
 const subscribe = (cb: () => void) => { listeners.add(cb); return () => { listeners.delete(cb); }; };
 
@@ -47,7 +53,7 @@ export function resetNav(href: string): void {
 }
 
 /** Put `href` on top of `tab`'s stack. A workout screen already in the stack is gone back to, anything else is pushed. */
-function open(n: Nav, tab: Tab, href: string): Nav {
+function open(n: Pick<Nav, 'tab' | 'stacks'>, tab: Tab, href: string): Pick<Nav, 'tab' | 'stacks'> {
   let st = n.stacks[tab].length ? n.stacks[tab] : seed(tab);
   const at = st.findIndex((e) => pathOf(e.href) === pathOf(href));
   if (at >= 0 && LOG_ONLY.includes(pathOf(href))) st = st.slice(0, at + 1);
@@ -61,17 +67,18 @@ function go(href: string, replace: boolean): void {
   if (to && to !== nav.tab) {
     // Another tab's first screen switches to that tab as it was left; a workout screen is opened inside Log.
     const n = { ...nav, tab: to, stacks: { ...nav.stacks, [to]: nav.stacks[to].length ? nav.stacks[to] : seed(to) } };
-    return commit(rootTab(path) ? n : open(n, to, href));
+    return commit(rootTab(path) ? n : open(n, to, href), 'push');
   }
   const cur = nav.stacks[nav.tab];
   if (replace) return commit({ ...nav, stacks: { ...nav.stacks, [nav.tab]: [...cur.slice(0, -1), entry(href)] } });
-  commit(open(nav, nav.tab, href));
+  const next = open(nav, nav.tab, href);
+  commit(next, next.stacks[nav.tab].length < cur.length ? 'pop' : 'push');
 }
 
 function pop(n: number): void {
   const cur = nav.stacks[nav.tab];
-  if (cur.length > 1) return commit({ ...nav, stacks: { ...nav.stacks, [nav.tab]: cur.slice(0, Math.max(1, cur.length - n)) } });
-  if (nav.tab !== 'home') commit({ ...nav, tab: 'home' });
+  if (cur.length > 1) return commit({ ...nav, stacks: { ...nav.stacks, [nav.tab]: cur.slice(0, Math.max(1, cur.length - n)) } }, 'pop');
+  if (nav.tab !== 'home') commit({ ...nav, tab: 'home' }, 'pop');
 }
 
 export const router = {
@@ -84,7 +91,7 @@ export const router = {
   /** Leave the workout: its tab is cleared, `href`'s tab starts over at `href`, with `then` on top. */
   dismissTo(href: string, then?: string) {
     const tab = owner(pathOf(href)) ?? 'home';
-    commit({ tab, stacks: { ...nav.stacks, log: [], [tab]: [entry(href), ...(then ? [entry(then)] : [])] } });
+    commit({ tab, stacks: { ...nav.stacks, log: [], [tab]: [entry(href), ...(then ? [entry(then)] : [])] } }, then ? 'push' : 'pop');
   },
   /** Dock tap. Another tab: switch to it as it was left. The current tab: pop to its first screen,
    *  or report 'at-root' so the caller can scroll to the top. */
@@ -95,8 +102,14 @@ export const router = {
     }
     const cur = nav.stacks[t];
     if (cur.length === 1) return 'at-root';
-    commit({ ...nav, stacks: { ...nav.stacks, [t]: cur.slice(0, 1) } });
+    commit({ ...nav, stacks: { ...nav.stacks, [t]: cur.slice(0, 1) } }, 'pop');
     return 'popped';
+  },
+  /** A slide finished: forget it, unless a newer change has already replaced it. */
+  settle(m: Move) {
+    if (nav.move !== m) return;
+    nav = { ...nav, move: null };
+    emit();
   },
   /** The workout ended somewhere other than its own screens (e.g. a restore): drop its tab. */
   clearLog() {

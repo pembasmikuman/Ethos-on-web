@@ -103,3 +103,44 @@ test('navigate to the screen already on top does nothing', () => {
   expect(topKey()).toBe(k);
   expect(show().stack).toEqual(['/', '/history/1']);
 });
+
+const move = () => { const m = navState().move; return m && { kind: m.kind, from: m.from.href }; };
+
+test('opening a screen slides in, going back slides out, switching tabs does not slide', () => {
+  resetNav('/');
+  expect(move()).toBeNull();
+  router.push('/history/1');
+  expect(move()).toEqual({ kind: 'push', from: '/' });
+  router.back();
+  expect(move()).toEqual({ kind: 'pop', from: '/history/1' });
+  router.tab('history');
+  expect(move()).toBeNull();
+  router.push('/history/2');
+  router.replace('/history/3');
+  expect(move()).toBeNull();
+});
+
+test('the workout screens slide like the native stack, and finishing slides its review in', () => {
+  resetNav('/');
+  router.push('/session');
+  expect(move()).toEqual({ kind: 'push', from: '/' });
+  router.push('/workout');
+  router.navigate('/session');
+  expect(move()).toEqual({ kind: 'pop', from: '/workout' });
+  router.push('/workout');
+  router.dismissTo('/', '/history/9?done=1');
+  expect(move()).toEqual({ kind: 'push', from: '/workout' });
+  router.dismissTo('/');
+  expect(move()).toEqual({ kind: 'pop', from: '/history/9?done=1' });
+});
+
+test('a slide that finished is settled only once, and a newer one is left alone', () => {
+  resetNav('/');
+  router.push('/history/1');
+  const first = navState().move!;
+  router.push('/history/2');
+  router.settle(first);
+  expect(move()).toEqual({ kind: 'push', from: '/history/1' });
+  router.settle(navState().move!);
+  expect(move()).toBeNull();
+});
