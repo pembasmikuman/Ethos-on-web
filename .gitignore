@@ -5,3 +5,4 @@ dist
 test-results
 .superpowers
 .playwright-mcp
+ethos_backup*.json
