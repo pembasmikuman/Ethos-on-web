@@ -15,7 +15,11 @@ jobs:
       - run: bun run build
         env:
           VITE_VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
-      - run: bunx wrangler deploy --var VAPID_PUBLIC_KEY:${{ vars.VAPID_PUBLIC_KEY }}
+      # The push server's private key goes up with each deploy, so no one has to run wrangler by hand.
+      - run: |
+          bun -e 'console.log(JSON.stringify({ VAPID_PRIVATE_JWK: process.env.VAPID_PRIVATE_JWK }))' > "$RUNNER_TEMP/secrets.json"
+          bunx wrangler deploy --var VAPID_PUBLIC_KEY:${{ vars.VAPID_PUBLIC_KEY }} --secrets-file "$RUNNER_TEMP/secrets.json"
         env:
+          VAPID_PRIVATE_JWK: ${{ secrets.VAPID_PRIVATE_JWK }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

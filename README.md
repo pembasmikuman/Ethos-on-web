@@ -83,7 +83,7 @@ Pushing to `main` runs the Deploy action: check, test, build, then `wrangler dep
 
 - repo variable `VAPID_PUBLIC_KEY` (the `VITE_VAPID_PUBLIC_KEY` value from `.env`)
 - repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
-- the worker secret, set once: `bunx wrangler secret put VAPID_PRIVATE_JWK` (paste the value from `.env`)
+- repo secret `VAPID_PRIVATE_JWK` (the value from `.env`). The Deploy action hands it to the worker, so there is no `wrangler secret put` step
 
 ## Design
 
