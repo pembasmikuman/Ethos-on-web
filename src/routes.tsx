@@ -1,4 +1,10 @@
 import type { ComponentType } from 'react';
+import Home from './screens/Home';
+import Welcome from './screens/Welcome';
+import Settings from './screens/Settings';
 
-/** Order matters: static segments before params. */
-export const ROUTES: [string, ComponentType][] = [];
+export const ROUTES: [string, ComponentType][] = [
+  ['/', Home],
+  ['/welcome', Welcome],
+  ['/settings', Settings],
+];
