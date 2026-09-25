@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { router, usePathname } from '../lib/nav';
+import { router, useNav, usePathname, type Tab } from '../lib/nav';
 import { useSafeAreaInsets } from '../lib/insets';
 import { css } from '../lib/css';
 import { useScheme, useTheme } from '../lib/theme';
@@ -37,11 +37,17 @@ function rubberband(over: number, dim: number, c = 0.55): number {
   return (over * dim * c) / (dim + c * Math.abs(over));
 }
 
+/** Scroll everything in the showing screen back to the top, as a second tap on an iPhone tab does. */
+function scrollToTop() {
+  for (const el of document.querySelectorAll<HTMLElement>('[data-screen=top] div')) if (el.scrollTop > 0) el.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 export function Dock() {
   const t = useTheme();
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
   const path = usePathname();
+  const tab = useNav().tab;
   const active = useWorkout((s) => s.sessionId !== null);
   const rest = useWorkout((s) => s.rest);
   const startedAt = useWorkout((s) => s.startedAt);
@@ -49,7 +55,7 @@ export function Dock() {
   const [now, setNow] = useState(Date.now());
 
   const ITEMS = active ? ALL_ITEMS : ALL_ITEMS.filter((i) => i.key !== 'log');
-  const selected = Math.max(0, ITEMS.findIndex((i) => i.href === path || (i.href === '/session' && (path === '/workout' || path === '/rest')) || (i.href === '/history' && path.startsWith('/history')) || (i.href === '/exercises' && path.startsWith('/exercise'))));
+  const selected = Math.max(0, ITEMS.findIndex((i) => i.key === tab));
   const maxX = (ITEMS.length - 1) * ITEM_W;
   const [x, setX] = useState(selected * ITEM_W);
   const [drag, setDrag] = useState(false);
@@ -63,11 +69,10 @@ export function Dock() {
     return () => clearInterval(id);
   }, [active]);
 
+  // Like the iPhone tab bar: another tab opens as it was left; the current one pops to its first screen, then scrolls to the top.
   const go = (i: number) => {
-    if (i === selected) return;
-    const href = ITEMS[i].href;
-    if (href === '/') router.dismissTo('/');
-    else router.navigate(href);
+    if (router.tab(ITEMS[i].key as Tab) === 'at-root') scrollToTop();
+    else setX(i * ITEM_W);
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -141,7 +146,7 @@ export function Dock() {
           const live = it.key === 'log';
           const ink = live ? (on ? t.bg : t.accent) : on ? t.accent : t.text;
           return (
-            <button type="button" key={it.key} disabled={on} onClick={() => go(i)} style={css(s.item)}>
+            <button type="button" key={it.key} onClick={() => go(i)} style={css(s.item)}>
               <svg width={22} height={22} viewBox="0 0 24 24" fill="none">
                 <path d={ICONS[it.key]} stroke={ink} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
               </svg>

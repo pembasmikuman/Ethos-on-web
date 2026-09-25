@@ -23,6 +23,8 @@ const root = createRoot(document.getElementById('root')!);
     );
     return;
   }
+  const { resetNav } = await import('./lib/nav');
+  resetNav(location.pathname + location.search);
   // Stores read kv when their module loads, so the app is imported only after loadKv.
   const { App } = await import('./App');
   root.render(<App />);

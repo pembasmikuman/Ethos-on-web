@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from '../lib/nav';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from '../rn';
 import { useSafeAreaInsets } from '../lib/insets';
 import { useTheme, useTopInset } from '../lib/theme';
@@ -25,7 +26,8 @@ export default function Settings() {
   const setAppearance = useUi((s) => s.setAppearance);
   // Built ahead so the Export tap can open the share sheet before any await (Safari needs that).
   const [file, setFile] = useState<File | null>(null);
-  useEffect(() => { backupFile().then(setFile); }, []);
+  // Rebuilt each time Settings comes into view, so Export never shares a backup from before your latest workout.
+  useFocusEffect(useCallback(() => { backupFile().then(setFile); }, []));
 
   const run = async (label: string, fn: () => Promise<string | void>) => {
     if (busy) return;

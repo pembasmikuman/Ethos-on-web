@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from '../rn';
-import { router } from '../lib/nav';
+import { router, useIsFocused } from '../lib/nav';
 import { useSafeAreaInsets } from '../lib/insets';
 import { useTheme, useTopInset } from '../lib/theme';
 import { fmtClock, fmtKg } from '../lib/format';
@@ -27,7 +27,9 @@ export default function Rest() {
   const left = rest ? Math.max(0, (rest.endsAt - now) / 1000) : 0;
 
   // Ringing and clearing the rest happen at app level (restAlarm); this screen just leaves once it is gone.
-  useEffect(() => { if (!rest) router.back(); }, [rest]);
+  // Only while showing: if rest ends while you are in another tab, this closes when you come back.
+  const focused = useIsFocused();
+  useEffect(() => { if (!rest && focused) router.back(); }, [rest, focused]);
 
   const block = blocks[exIdx];
   const next = block?.sets[focus.setIdx];

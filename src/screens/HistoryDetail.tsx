@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from '../rn';
-import { router, useLocalSearchParams } from '../lib/nav';
+import { router, useIsFocused, useLocalSearchParams } from '../lib/nav';
 import { useSafeAreaInsets } from '../lib/insets';
 import { deleteSession, deleteSet, exerciseById, insertSet, sessionById, sessionSets, setSessionNotes, updateSet, type SessionRow } from '../db/queries';
 import { useTheme, useTopInset } from '../lib/theme';
@@ -39,10 +39,11 @@ export default function SessionDetail() {
   const pending = useUi((s) => s.pendingExercise);
   const clearPending = useUi((s) => s.clearPendingExercise);
   const setDockHidden = useUi((s) => s.setDockHidden);
+  const focused = useIsFocused();
   useEffect(() => {
-    setDockHidden(edit !== null);
+    setDockHidden(focused && edit !== null);
     return () => setDockHidden(false);
-  }, [edit !== null]);
+  }, [focused, edit !== null]);
 
   /** Type a brand new set for an exercise, weight prefilled from its last set here. */
   const beginNew = (exercise_id: string, name: string, weight = '') =>
@@ -50,11 +51,12 @@ export default function SessionDetail() {
 
   // The picker hands the exercise back through the store, so pop back here and the
   // numpad is already open on set 1 of it.
+  // Only the review showing takes it: another one may be alive in a different tab.
   useEffect(() => {
-    if (!pending) return;
+    if (!pending || !focused) return;
     clearPending();
     exerciseById(pending).then((ex) => ex && beginNew(ex.id, ex.brand ? `${ex.name} · ${ex.brand}` : ex.name));
-  }, [pending]);
+  }, [pending, focused]);
 
   if (!session) return null;
   const { date, mins } = sessionMeta(session);
