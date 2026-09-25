@@ -1,4 +1,6 @@
 import { getDb } from '../db';
+import { useWorkout } from '../store/workout';
+import { cancelRestDone } from './rest';
 
 const TABLES = ['exercises', 'routines', 'routine_exercises', 'workout_sessions', 'logged_sets', 'session_photos'] as const;
 
@@ -33,6 +35,9 @@ export async function restoreBackup(b: Backup): Promise<void> {
     }
     for (const [name, b64] of Object.entries(b.photo_files ?? {})) await db.runAsync('INSERT INTO photo_files (name, b64) VALUES (?, ?)', [name, b64]);
   });
+  // The restore wiped any session in progress, so the workout screen lets go of it too.
+  if (useWorkout.getState().rest) void cancelRestDone();
+  useWorkout.setState({ sessionId: null, routine: null, blocks: [], rest: null });
 }
 
 export function backupSummary(b: Backup): string {

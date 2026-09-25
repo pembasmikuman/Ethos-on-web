@@ -25,3 +25,14 @@ test('rejects files that are not Ethos backups', () => {
   expect(() => parseBackup('{"app":"other"}')).toThrow('Not an Ethos backup');
   expect(() => parseBackup('not json')).toThrow();
 });
+
+test('restoring mid-workout drops the workout, whose session the restore just wiped', async () => {
+  const { useWorkout } = await import('../store/workout');
+  const { listRoutines } = await import('../db/queries');
+  await restoreBackup(parseBackup(text));
+  await useWorkout.getState().preview((await listRoutines())[0]);
+  await useWorkout.getState().begin();
+  await restoreBackup(parseBackup(text));
+  const s = useWorkout.getState();
+  expect([s.sessionId, s.routine, s.blocks.length, s.rest]).toEqual([null, null, 0, null]);
+});
