@@ -9,7 +9,7 @@ input, textarea { -webkit-user-select: text; user-select: text; font: inherit; c
 input::placeholder, textarea::placeholder { color: var(--dim); }
 
 /* Behave like React Native views so ported styles work unchanged. */
-#root div, #root button { display: flex; flex-direction: column; flex-shrink: 0; position: relative; box-sizing: border-box; min-width: 0; }
+#root div, #root button { display: flex; flex-direction: column; flex-shrink: 0; position: relative; box-sizing: border-box; min-width: 0; min-height: 0; }
 #root button { all: unset; display: flex; flex-direction: column; flex-shrink: 0; position: relative; box-sizing: border-box; cursor: pointer; touch-action: manipulation; }
 #root button:disabled { cursor: default; }
 #root span { white-space: pre-wrap; }

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Exercise } from '../db';
 import { deleteSession, finishSession, insertSet, recentExerciseSessions, routineExercises, startSession, type LoggedSet, type Routine, setExerciseNotes } from '../db/queries';
 import { nextWeight, stalled, warmupRamp } from '../lib/progression';
-import { cancelRestDone, scheduleRestDone } from '../lib/rest';
+import { cancelRestDone, ensurePush, scheduleRestDone } from '../lib/rest';
 import { fmtKg } from '../lib/format';
 
 export type Field = 'weight' | 'reps' | 'rir';
@@ -61,6 +61,12 @@ async function buildBlock(ex: Exercise, targetSets: number): Promise<ExerciseBlo
 
 let seq = 0;
 const emptySet = (weight: string, type: 'warmup' | 'working' = 'working'): SetDraft => ({ id: ++seq, type, weight, reps: '', rir: '', done: false });
+
+/** Store the push id once the server answers, unless the rest it belongs to has already changed. */
+function attachNotif(endsAt: number, notifId: string | null): void {
+  const r = useWorkout.getState().rest;
+  if (r && r.endsAt === endsAt) useWorkout.setState({ rest: { ...r, notifId } });
+}
 
 export const useWorkout = create<State>((set, get) => ({
   sessionId: null,
@@ -152,7 +158,8 @@ export const useWorkout = create<State>((set, get) => ({
   },
 
   async completeSet() {
-    const { blocks, exIdx, focus, sessionId, rest } = get();
+    ensurePush(); // first, before any await: iOS only shows the permission prompt inside the tap
+    const { blocks, exIdx, focus, sessionId } = get();
     if (!sessionId) return;
     const b = blocks[exIdx];
     const s = b.sets[focus.setIdx];
@@ -171,24 +178,25 @@ export const useWorkout = create<State>((set, get) => ({
     });
     const sets = b.sets.map((x, i) => (i === focus.setIdx ? { ...x, done: true } : x));
     const nextIdx = sets.findIndex((x, i) => i > focus.setIdx && !x.done);
-    await cancelRestDone(rest?.notifId ?? null);
     const total = b.exercise.default_rest_seconds;
-    const notifId = await scheduleRestDone(total);
+    const endsAt = Date.now() + total * 1000;
     set({
       blocks: blocks.map((x, i) => (i === exIdx ? { ...x, sets } : x)),
       focus: { setIdx: nextIdx === -1 ? focus.setIdx : nextIdx, field: nextIdx === -1 ? focus.field : 'reps' },
-      rest: { endsAt: Date.now() + total * 1000, total, notifId },
+      rest: { endsAt, total, notifId: null },
     });
+    // A new schedule replaces the device's pending alarm on the server, so no cancel first.
+    void scheduleRestDone(total).then((notifId) => attachNotif(endsAt, notifId));
   },
 
   async adjustRest(delta) {
-    const { rest, blocks, exIdx } = get();
+    const { rest } = get();
     if (!rest) return;
-    await cancelRestDone(rest.notifId);
     const endsAt = Math.max(Date.now(), rest.endsAt + delta * 1000);
     const secs = Math.round((endsAt - Date.now()) / 1000);
-    const notifId = await scheduleRestDone(secs);
-    set({ rest: { ...rest, endsAt, total: Math.max(rest.total + delta, secs), notifId } });
+    set({ rest: { ...rest, endsAt, total: Math.max(rest.total + delta, secs) } });
+    if (secs < 1) void cancelRestDone(rest.notifId);
+    else void scheduleRestDone(secs).then((notifId) => attachNotif(endsAt, notifId));
   },
 
   restDone() {
@@ -197,13 +205,13 @@ export const useWorkout = create<State>((set, get) => ({
 
   async skipRest() {
     const { rest } = get();
-    await cancelRestDone(rest?.notifId ?? null);
+    void cancelRestDone(rest?.notifId ?? null);
     set({ rest: null });
   },
 
   async cancel() {
     const { sessionId, rest } = get();
-    await cancelRestDone(rest?.notifId ?? null);
+    void cancelRestDone(rest?.notifId ?? null);
     if (sessionId) await deleteSession(sessionId);
     set({ sessionId: null, routine: null, blocks: [], rest: null });
   },
@@ -215,7 +223,7 @@ export const useWorkout = create<State>((set, get) => ({
 
   async finish() {
     const { sessionId, rest } = get();
-    await cancelRestDone(rest?.notifId ?? null);
+    void cancelRestDone(rest?.notifId ?? null);
     if (sessionId) await finishSession(sessionId);
     set({ sessionId: null, routine: null, blocks: [], rest: null });
     return sessionId;

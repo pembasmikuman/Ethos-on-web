@@ -11,9 +11,9 @@ export function Swipe({ onRemove, children }: { onRemove: () => void; children: 
   const g = useRef<{ x0: number; y0: number; on: boolean | null } | null>(null);
   return (
     <div style={{ overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 96, alignItems: 'center', justifyContent: 'center' }}>
+      {x < 0 && <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 96, alignItems: 'center', justifyContent: 'center' }}>
         <Label color={t.accent}>Remove</Label>
-      </div>
+      </div>}
       <div
         style={{ transform: `translateX(${x}px)`, transition: g.current?.on ? 'none' : 'transform 200ms', touchAction: 'pan-y' }}
         onPointerDown={(e) => { g.current = { x0: e.clientX, y0: e.clientY, on: null }; }}

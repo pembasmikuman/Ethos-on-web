@@ -8,6 +8,11 @@ import ExerciseDetail from './screens/ExerciseDetail';
 import Routines from './screens/Routines';
 import Pick from './screens/Pick';
 import RoutineDetail from './screens/RoutineDetail';
+import Session from './screens/Session';
+import Workout from './screens/Workout';
+import Rest from './screens/Rest';
+import History from './screens/History';
+import HistoryDetail from './screens/HistoryDetail';
 
 export const ROUTES: [string, ComponentType][] = [
   ['/', Home],
@@ -19,4 +24,9 @@ export const ROUTES: [string, ComponentType][] = [
   ['/routines', Routines],
   ['/routines/pick', Pick],
   ['/routines/:id', RoutineDetail],
+  ['/session', Session],
+  ['/workout', Workout],
+  ['/rest', Rest],
+  ['/history', History],
+  ['/history/:id', HistoryDetail],
 ];
