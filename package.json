@@ -7,7 +7,7 @@
     "build": "vite build",
     "check": "tsc --noEmit && tsc --noEmit -p worker",
     "test": "bun test src worker",
-    "deploy": "vite build && wrangler deploy"
+    "deploy": "vite build && wrangler deploy --var VAPID_PUBLIC_KEY:$VITE_VAPID_PUBLIC_KEY"
   },
   "dependencies": {
     "@sqlite.org/sqlite-wasm": "^3.53.4-build1",
