@@ -3,6 +3,10 @@ import { openWorkerDb } from './db/client';
 import { initDb } from './db';
 import { loadKv } from './db/kv';
 
+// An installed iPhone app with a see-through status bar sizes 100% and 100dvh to the screen minus the status bar,
+// which leaves a blank strip at the bottom and lifts the Dock. It always fills the whole screen (portrait only), so use that.
+if (matchMedia('(display-mode: standalone)').matches) document.documentElement.style.setProperty('--app-h', `${screen.height}px`);
+
 const root = createRoot(document.getElementById('root')!);
 
 (async () => {

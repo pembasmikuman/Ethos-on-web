@@ -34,7 +34,7 @@ export function App() {
     if (p) { setRouteParams(p); Screen = C; break; }
   }
   return (
-    <div style={{ height: '100dvh', background: t.bg }}>
+    <div style={{ height: 'var(--app-h, 100dvh)', background: t.bg }}>
       {Screen ? <Screen key={path + location.search} /> : <p style={{ color: t.mute, padding: 24 }}>Not found</p>}
       <Dock />
     </div>

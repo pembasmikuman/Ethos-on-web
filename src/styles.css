@@ -3,7 +3,7 @@
 @font-face { font-family: Mono500; src: url(/fonts/JetBrainsMono_500Medium.ttf); font-display: block; }
 @font-face { font-family: Mono600; src: url(/fonts/JetBrainsMono_600SemiBold.ttf); font-display: block; }
 
-html, body, #root { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
+html, body, #root { margin: 0; height: var(--app-h, 100%); overflow: hidden; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
 body { background: var(--bg); color: var(--text); -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
 input, textarea { -webkit-user-select: text; user-select: text; font: inherit; color: inherit; background: none; border: none; outline: none; padding: 0; }
 input::placeholder, textarea::placeholder { color: var(--dim); }

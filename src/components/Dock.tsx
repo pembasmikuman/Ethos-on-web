@@ -155,7 +155,7 @@ export function Dock() {
 }
 
 const s = {
-  wrap: { position: 'fixed', left: 0, right: 0, alignItems: 'center', zIndex: 50 },
+  wrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 50 },
   pill: { flexDirection: 'row', borderRadius: 28, borderWidth: 1, overflow: 'hidden', paddingHorizontal: PAD },
   highlight: { position: 'absolute', left: PAD, top: 4, width: ITEM_W, height: 48, borderRadius: 24, borderWidth: 1 },
   item: { width: ITEM_W, height: 56, alignItems: 'center', justifyContent: 'center', gap: 3 },
