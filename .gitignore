@@ -4,3 +4,4 @@ dist
 .wrangler
 test-results
 .superpowers
+.playwright-mcp
