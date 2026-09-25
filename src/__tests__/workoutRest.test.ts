@@ -1,13 +1,19 @@
-import { afterAll, beforeAll, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { bunDb } from '../db/bun';
 import { initDb } from '../db';
 import { loadKv } from '../db/kv';
 
-const real = await import('../lib/rest');
-const never = () => new Promise<never>(() => {});
-mock.module('../lib/rest', () => ({ ...real, scheduleRestDone: never, cancelRestDone: never }));
-// bun's module mocks are process-wide: hand the real one back so other test files get it.
-afterAll(() => { mock.module('../lib/rest', () => real); });
+// A phone whose notification prompt is never answered, so anything that waits on the push server waits forever.
+// Only browser stand-ins, removed afterwards (a module mock here leaked into other test files on CI).
+const FAKES = ['window', 'PushManager', 'Notification'] as const;
+beforeAll(() => {
+  Object.assign(globalThis, { window: globalThis, PushManager: class {}, Notification: { permission: 'default', requestPermission: () => new Promise(() => {}) } });
+  Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: {} });
+});
+afterAll(() => {
+  for (const k of FAKES) delete (globalThis as Record<string, unknown>)[k];
+  delete (navigator as { serviceWorker?: unknown }).serviceWorker;
+});
 
 beforeAll(async () => { await initDb(bunDb()); await loadKv(); });
 
