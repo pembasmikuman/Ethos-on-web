@@ -46,16 +46,14 @@ export async function backupFile(): Promise<File> {
   return new File([JSON.stringify(data)], `ethos_backup_${stamp}.json`, { type: 'application/json' });
 }
 
-export async function exportBackup(): Promise<void> {
-  await shareFile(await backupFile());
-}
-
-/** Share sheet on iPhone (Save to Files, AirDrop), plain download elsewhere. Call straight from the tap:
- *  Safari refuses share() if the tap is already "used up" by an earlier await. */
-export async function shareFile(file: File): Promise<void> {
+/** Share sheet on iPhone (Save to Files, AirDrop), plain download in a desktop browser. Call straight from the tap:
+ *  Safari refuses share() if the tap is already "used up" by an earlier await. In the installed app a download
+ *  would land nowhere useful, so a failed share is an error there. */
+export async function shareFile(file: File, installed = matchMedia('(display-mode: standalone)').matches): Promise<void> {
   if (navigator.canShare?.({ files: [file] })) {
     try { await navigator.share({ files: [file] }); return; } catch (e) { if ((e as Error).name === 'AbortError') return; }
   }
+  if (installed) throw new Error("Couldn't open the share sheet. Try Export again.");
   const a = document.createElement('a');
   a.href = URL.createObjectURL(file);
   a.download = file.name;

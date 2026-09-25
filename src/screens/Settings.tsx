@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from '../rn';
 import { useSafeAreaInsets } from '../lib/insets';
 import { useTheme, useTopInset } from '../lib/theme';
-import { backupFile, backupSummary, exportBackup, pickBackup, restoreBackup, shareFile } from '../lib/backup';
+import { backupFile, backupSummary, pickBackup, restoreBackup, shareFile } from '../lib/backup';
 import { alertStatus } from '../lib/rest';
 import { Doto, Label } from '../components/Text';
 import { DOCK_HEIGHT } from '../components/Dock';
@@ -53,11 +53,11 @@ export default function Settings() {
       });
     });
 
-  const row = (title: string, sub: string, onPress: () => void, danger = false) => (
+  const row = (title: string, sub: string, onPress: () => void, danger = false, waiting = false) => (
     <Pressable
      
       onPress={onPress}
-      disabled={busy !== null}
+      disabled={busy !== null || waiting}
       style={({ pressed }) => [s.row, { backgroundColor: t.card, borderColor: t.line, opacity: pressed || busy ? 0.7 : 1 }]}
     >
       <View style={{ gap: 4, flex: 1 }}>
@@ -82,7 +82,7 @@ export default function Settings() {
         })}
       </View>
       <Label style={s.section}>Backup</Label>
-      {row('EXPORT', 'Save a JSON snapshot to Files, iCloud or Drive', () => run('export', () => (file ? shareFile(file) : exportBackup())))}
+      {row('EXPORT', 'Save a JSON snapshot to Files, iCloud or Drive', () => file && run('export', () => shareFile(file)), false, !file)}
       {row('RESTORE', 'Pick a backup file. Replaces all current data.', onRestore, true)}
       <View style={[s.row, { backgroundColor: t.card, borderColor: t.line, gap: 4 }]}>
         <Doto size={22}>REST ALERTS</Doto>
