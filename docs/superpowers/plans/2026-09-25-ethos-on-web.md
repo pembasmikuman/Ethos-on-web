@@ -59,7 +59,9 @@
 2. **Reload mid-rest** (iOS evicted the page while you were in Spotify): the app comes back on the same exercise and set, the countdown continues, the bell never rings twice or late, and new sets never reuse an old draft id. Covered by `restOutcome` tests and the persistence test in Task 12.
 3. **Native backup with photos → import → export** must give the same data, `photo_files` included. Covered by the bun round-trip test (Task 3) and the Playwright test (Task 13).
 4. **Plain Safari tab or desktop browser** (no `PushManager`, no `Notification`, no `wakeLock`): no crash, the bell and countdown still work, Settings says alerts are unsupported. Covered by `alertStatus` tests in Task 6 and a manual check in Task 12.
-5. **Second tab or window holding the database**: show "Ethos is open somewhere else" instead of a blank screen. Covered by the boot error screen and its manual check in Task 4.
+5. **Weak or no signal when logging a set**: the set is marked done and the countdown starts instantly. The push request runs in the background with a 4 s timeout, and a slow permission prompt or a missing service worker never holds up logging. Covered by the `workoutRest` test in Task 11.
+
+(The second tab or window holding the database, and a quick reload racing the old page for the storage lock, are covered by the boot retry and the manual checks in Task 4.)
 
 ---
 
@@ -399,7 +401,7 @@ git add -A && git commit -m "Carry over the SQL layer behind a small driver, add
 
 **Interfaces:**
 - Consumes: `getDb`, `Db` (Task 2).
-- Produces: `type Backup`, `dumpBackup(): Promise<Backup>`, `parseBackup(text: string): Backup` (throws `Error('Not an Ethos backup')`), `restoreBackup(b: Backup): Promise<void>`, `backupSummary(b): string`, `exportBackup(): Promise<void>`, `pickBackup(): Promise<Backup | null>`.
+- Produces: `type Backup`, `backupFile(): Promise<File>`, `shareFile(file: File): Promise<void>`, `dumpBackup(): Promise<Backup>`, `parseBackup(text: string): Backup` (throws `Error('Not an Ethos backup')`), `restoreBackup(b: Backup): Promise<void>`, `backupSummary(b): string`, `exportBackup(): Promise<void>`, `pickBackup(): Promise<Backup | null>`.
 
 - [ ] **Step 1: Write the fixture**
 
@@ -502,11 +504,20 @@ export function backupSummary(b: Backup): string {
   return `${b.workout_sessions.length} sessions · ${b.logged_sets.length} sets · exported ${b.exported_at.slice(0, 10)}`;
 }
 
-/** Share sheet on iPhone (Save to Files, AirDrop), plain download elsewhere. */
-export async function exportBackup(): Promise<void> {
+/** The backup as a ready-to-share file. Settings builds it ahead of time so the tap can share with no await first. */
+export async function backupFile(): Promise<File> {
   const data = await dumpBackup();
   const stamp = data.exported_at.slice(0, 19).replace(/[:T]/g, '-');
-  const file = new File([JSON.stringify(data)], `ethos_backup_${stamp}.json`, { type: 'application/json' });
+  return new File([JSON.stringify(data)], `ethos_backup_${stamp}.json`, { type: 'application/json' });
+}
+
+export async function exportBackup(): Promise<void> {
+  await shareFile(await backupFile());
+}
+
+/** Share sheet on iPhone (Save to Files, AirDrop), plain download elsewhere. Call straight from the tap:
+ *  Safari refuses share() if the tap is already "used up" by an earlier await. */
+export async function shareFile(file: File): Promise<void> {
   if (navigator.canShare?.({ files: [file] })) {
     try { await navigator.share({ files: [file] }); return; } catch (e) { if ((e as Error).name === 'AbortError') return; }
   }
@@ -597,8 +608,20 @@ Multi-statement SQL (migrations) is sent without `bind`, and `exec` runs every s
 ```ts
 import { tx, type Db } from './driver';
 
-/** Start the SQLite worker. Resolves once the database file is open, rejects if it can't be (e.g. held by another tab). */
-export function openWorkerDb(): Promise<Db> {
+/** Start the SQLite worker. On a quick reload the old page's worker can still hold the file lock for a moment,
+ *  so try a few times before giving up (a real second tab keeps failing). */
+export async function openWorkerDb(): Promise<Db> {
+  for (let i = 0; ; i++) {
+    try {
+      return await openOnce();
+    } catch (e) {
+      if (i >= 5) throw e;
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
+}
+
+function openOnce(): Promise<Db> {
   const w = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
   const pending = new Map<number, { res: (v: any) => void; rej: (e: Error) => void }>();
   let n = 0;
@@ -616,7 +639,11 @@ export function openWorkerDb(): Promise<Db> {
   };
   return new Promise((resolve, reject) => {
     w.onmessage = ({ data }) => {
-      if (data.id === 0) return data.error ? reject(new Error(data.error)) : resolve(db);
+      if (data.id === 0) {
+        if (!data.error) return resolve(db);
+        w.terminate(); // a fresh worker per try, so a cached failure inside the library can't stick
+        return reject(new Error(data.error));
+      }
       const p = pending.get(data.id)!;
       pending.delete(data.id);
       if (data.error) p.rej(new Error(data.error));
@@ -671,7 +698,7 @@ export function App() {
 - [ ] **Step 4: Check it in a real browser**
 
 Run: `bun run dev`, then open `http://localhost:5173` with the Playwright MCP browser.
-Expected: `exercises: <number > 1000>`. Reload and the count stays the same, because seed must not duplicate. Open a second tab to the same URL and expect the "open somewhere else" message. (Chromium locks OPFS access handles the same way Safari does.)
+Expected: `exercises: <number > 1000>`. Reload and the count stays the same, because seed must not duplicate. Reload quickly 10 times in a row and never see the lock screen. Open a second tab to the same URL and expect the "open somewhere else" message after about 2 s. (Chromium locks OPFS access handles the same way Safari does.)
 
 - [ ] **Step 5: Commit**
 
@@ -713,11 +740,12 @@ Add `<link rel="apple-touch-icon" href="/apple-touch-icon.png" />` to `index.htm
 `src/sw.ts`:
 ```ts
 /// <reference lib="webworker" />
-import { createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
+import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 
 declare let self: ServiceWorkerGlobalScope;
 
+cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html'), { denylist: [/^\/api\//] }));
 
@@ -796,7 +824,7 @@ export default {
 `worker/tsconfig.json`:
 ```json
 {
-  "compilerOptions": { "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler", "strict": true, "noEmit": true, "types": ["@cloudflare/workers-types", "bun"], "lib": ["ES2022"] },
+  "compilerOptions": { "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler", "strict": true, "noEmit": true, "types": ["@cloudflare/workers-types"], "lib": ["ES2022"] },
   "include": ["."],
   "exclude": ["*.test.ts"]
 }
@@ -1078,7 +1106,8 @@ export function ensurePush(): void {
   sub = perm
     .then(async (p) => {
       if (p !== 'granted') return null;
-      const reg = await navigator.serviceWorker.ready;
+      // ready never resolves without a registered SW (e.g. `bun run dev`), so give up after 4 s.
+      const reg = await Promise.race([navigator.serviceWorker.ready, new Promise<never>((_, rej) => setTimeout(() => rej(new Error('no service worker')), 4000))]);
       const s = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(import.meta.env.VITE_VAPID_PUBLIC_KEY) }));
       subscribed = true;
       return s;
@@ -1086,10 +1115,18 @@ export function ensurePush(): void {
     .catch(() => null);
 }
 
-const post = (method: 'POST' | 'DELETE', body: object) =>
-  fetch('/api/rest', { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+// One request at a time, in order, so a cancel can never overtake the schedule it is cancelling.
+let chain: Promise<unknown> = Promise.resolve();
+function post(method: 'POST' | 'DELETE', body: object): Promise<Response> {
+  const p = chain.then(() =>
+    fetch('/api/rest', { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(4000) }),
+  );
+  chain = p.catch(() => {});
+  return p;
+}
 
-/** Ask the server to push "Rest done" in `seconds`. Returns the endpoint as the id, or null (no permission, offline). */
+/** Ask the server to push "Rest done" in `seconds`, replacing any pending one for this device.
+ *  Returns the endpoint as the id, or null (no permission, offline, timed out). Never await this in the logging path. */
 export async function scheduleRestDone(seconds: number): Promise<string | null> {
   if (seconds < 1) return null;
   const s = await sub;
@@ -1688,10 +1725,12 @@ onScroll={(e) => { const el = e.currentTarget; clearTimeout(tmr.current); tmr.cu
 ```
 - Welcome and Settings restore flow: `pickBackup()` now rejects on a bad file. Keep the old `try/catch` and `Alert.alert('Not an Ethos backup', String(e))`.
 - Settings: add a row under Backup titled "REST ALERTS" whose subtitle comes from `alertStatus()`: `on` → "On. A banner shows when rest ends in another app.", `off` → "Asked the first time you rest.", `blocked` → "Blocked. Allow in iOS Settings → Notifications → Ethos.", `unsupported` → "Add Ethos to the Home Screen to get alerts in other apps." It's not tappable.
+- Settings export: build the file ahead of time so the tap shares with no await before it. `const [file, setFile] = useState<File | null>(null); useEffect(() => { backupFile().then(setFile); }, []);` Export's press handler is `file ? shareFile(file) : exportBackup()`, and call `backupFile().then(setFile)` again after a restore.
 - Settings: drop any row that only existed for sound choice or native-only features. Compare with `OLD/src/app/settings.tsx` and keep everything else.
 - [ ] **Step 2: Register the routes** `['/', Home]`, `['/welcome', Welcome]`, `['/settings', Settings]`.
 - [ ] **Step 3: Check in the browser** (Playwright MCP, 390×844). On a fresh profile, Home redirects to Welcome. Restore `src/__tests__/fixtures/backup.json` through Welcome, and Home then shows the volume, days and body-map panels with that session counted. Screenshot both themes (Settings → appearance) and compare with `OLD/docs/design/Home.png`. Export from Settings and expect a file download (desktop fallback).
-- [ ] **Step 4: Commit** `git commit -am "Home, Welcome and Settings screens, with rest alert status"` (add new files first).
+- [ ] **Step 4: Check backup on the iPhone** (installed app, user runs it; Playwright can't cover the share sheet or the Files app). Settings → Export opens the share sheet → Save to Files. Then Settings → Restore, pick the user's real native backup from Files (AirDropped from the old app), and expect the summary dialog, then the history appears. If Export throws or nothing opens, report the error text. Don't fall back to a download in standalone mode.
+- [ ] **Step 5: Commit** `git commit -am "Home, Welcome and Settings screens, with rest alert status"` (add new files first).
 
 ---
 
@@ -1717,24 +1756,90 @@ onScroll={(e) => { const el = e.currentTarget; clearTimeout(tmr.current); tmr.cu
 **Files:**
 - Port: `OLD/src/app/{session,workout,rest}.tsx` → `src/screens/{Session,Workout,Rest}.tsx`; `OLD/src/app/history/{index,[id]}.tsx` → `src/screens/{History,HistoryDetail}.tsx`
 - Port: `OLD/src/store/workout.ts` → `src/store/workout.ts`
+- Create: `src/__tests__/workoutRest.test.ts`
 - Modify: `src/routes.tsx`
 
 **Interfaces:**
 - Consumes: `ensurePush`, `scheduleRestDone(seconds)`, `cancelRestDone(id)` (Task 6).
 
-- [ ] **Step 1: Port the workout store.** Copy it, then:
-- `completeSet`: first line (before any `await`) `ensurePush();`. The call becomes `scheduleRestDone(total)` (no body text, since the push has no payload).
-- `adjustRest`: `scheduleRestDone(secs)`.
-- Import `ensurePush, scheduleRestDone, cancelRestDone` from `../lib/rest`.
-- Persistence and the `seq` change come in Task 12. Leave them alone here.
-- [ ] **Step 2: Port the screens.** Specifics:
+- [ ] **Step 1: Failing test: logging never waits on the network**
+
+`src/__tests__/workoutRest.test.ts`:
+```ts
+import { beforeAll, expect, mock, test } from 'bun:test';
+import { bunDb } from '../db/bun';
+import { initDb } from '../db';
+import { loadKv } from '../db/kv';
+
+const real = await import('../lib/rest');
+const never = () => new Promise<never>(() => {});
+mock.module('../lib/rest', () => ({ ...real, scheduleRestDone: never, cancelRestDone: never }));
+
+beforeAll(async () => { await initDb(bunDb()); await loadKv(); });
+
+test('a set is done and rest starts even when the push server never answers', async () => {
+  const { useWorkout } = await import('../store/workout');
+  const { listRoutines } = await import('../db/queries');
+  const w = useWorkout.getState();
+  await w.preview((await listRoutines())[0]);
+  await useWorkout.getState().begin();
+  for (const [f, v] of [['weight', '60'], ['reps', '8']] as const) { useWorkout.getState().setFocus(0, f); useWorkout.getState().input(v); }
+  await useWorkout.getState().completeSet();
+  expect(useWorkout.getState().blocks[0].sets[0].done).toBe(true);
+  expect(useWorkout.getState().rest?.endsAt).toBeGreaterThan(Date.now());
+  await useWorkout.getState().adjustRest(30);
+  await useWorkout.getState().skipRest();
+  expect(useWorkout.getState().rest).toBeNull();
+});
+```
+Run: `bun test src/__tests__/workoutRest.test.ts`. Expected: FAIL (the store module isn't there yet, and once copied as-is, the test times out).
+
+- [ ] **Step 2: Port the workout store.** Copy it, import `ensurePush, scheduleRestDone, cancelRestDone` from `../lib/rest`, then change the rest handling so nothing in the logging path awaits the network:
+```ts
+  async completeSet() {
+    ensurePush(); // first, before any await: iOS only shows the permission prompt inside the tap
+    const { blocks, exIdx, focus, sessionId } = get();
+    // ...unchanged: validate, insertSet(...), compute sets and nextIdx...
+    const total = b.exercise.default_rest_seconds;
+    const endsAt = Date.now() + total * 1000;
+    set({
+      blocks: blocks.map((x, i) => (i === exIdx ? { ...x, sets } : x)),
+      focus: { setIdx: nextIdx === -1 ? focus.setIdx : nextIdx, field: nextIdx === -1 ? focus.field : 'reps' },
+      rest: { endsAt, total, notifId: null },
+    });
+    // A new schedule replaces the device's pending alarm on the server, so no cancel first.
+    void scheduleRestDone(total).then((notifId) => attachNotif(endsAt, notifId));
+  },
+
+  async adjustRest(delta) {
+    const { rest } = get();
+    if (!rest) return;
+    const endsAt = Math.max(Date.now(), rest.endsAt + delta * 1000);
+    const secs = Math.round((endsAt - Date.now()) / 1000);
+    set({ rest: { ...rest, endsAt, total: Math.max(rest.total + delta, secs) } });
+    if (secs < 1) void cancelRestDone(rest.notifId);
+    else void scheduleRestDone(secs).then((notifId) => attachNotif(endsAt, notifId));
+  },
+```
+with, above the store:
+```ts
+/** Store the push id once the server answers, unless the rest it belongs to has already changed. */
+function attachNotif(endsAt: number, notifId: string | null): void {
+  const r = useWorkout.getState().rest;
+  if (r && r.endsAt === endsAt) useWorkout.setState({ rest: { ...r, notifId } });
+}
+```
+In `skipRest`, `cancel` and `finish`, change `await cancelRestDone(...)` to `void cancelRestDone(...)`.
+Persistence and the `seq` change come in Task 12. Leave them alone here.
+Run: `bun test`. Expected: PASS.
+- [ ] **Step 3: Port the screens.** Specifics:
 - `Workout`: `Swipeable` → `<Swipe key={set.id} onRemove={() => removeSet(i)}>`. The vertical exercise pager (`OLD/src/app/workout.tsx:197-215`) becomes `className="snap-y"` with each page `height: pageH`, and the `onMomentumScrollEnd` logic moves into a debounced `onScroll` (same pattern as Task 9) using `el.scrollTop / pageH`. `Alert.prompt` for notes keeps its call.
 - `Workout` finish: `router.dismissTo('/'); router.push(\`/history/${id}?done=1\`)` becomes `router.dismissTo('/', \`/history/${id}?done=1\`)`. Cancel becomes `router.dismissTo('/')`.
 - `Rest`: delete the `left <= 0` effect that called `doneHaptic(); restDone(); router.back();` and replace it with `useEffect(() => { if (!rest) router.back(); }, [rest]);`. Task 12 moves ringing and `restDone` to the app level so they fire on any screen.
 - `HistoryDetail`: delete the photos strip, `pickPhoto`, and the `photos` import. Import `setSessionNotes` from `../db/queries`. Keep the review-and-add flow (`?done=1`, `/routines/pick?log=`).
-- [ ] **Step 3: Register the routes** `['/session', Session]`, `['/workout', Workout]`, `['/rest', Rest]`, `['/history', History]`, `['/history/:id', HistoryDetail]`.
-- [ ] **Step 4: Check in the browser.** Start a routine, log three sets with the numpad (kg → reps → RIR), swipe one away, swipe up to the next exercise, finish, land on the review screen, add a set there, then open History and edit a set. Compare Workout against `OLD/docs/design/Main.png`.
-- [ ] **Step 5: Commit** `"Workout flow: session preview, logging, rest screen, history and review"`.
+- [ ] **Step 4: Register the routes** `['/session', Session]`, `['/workout', Workout]`, `['/rest', Rest]`, `['/history', History]`, `['/history/:id', HistoryDetail]`.
+- [ ] **Step 5: Check in the browser.** Start a routine, log three sets with the numpad (kg → reps → RIR), swipe one away, swipe up to the next exercise, finish, land on the review screen, add a set there, then open History and edit a set. Compare Workout against `OLD/docs/design/Main.png`.
+- [ ] **Step 6: Commit** `"Workout flow: session preview, logging, rest screen, history and review"`.
 
 ---
 
@@ -1909,6 +2014,8 @@ export function useRestAlarm(): void {
 
 In `src/App.tsx`:
 ```tsx
+// iOS may relaunch an evicted home-screen app at start_url, so send an unfinished workout back to its screen.
+useEffect(() => { if (useWorkout.getState().sessionId && location.pathname === '/') router.replace('/workout'); }, []);
 const active = useWorkout((s) => s.sessionId !== null);
 useWakeLock(active);
 useRestAlarm();
@@ -1926,8 +2033,9 @@ iPhone (installed, user runs it):
 1. The bell rings with the app open.
 2. The screen doesn't dim during a session.
 3. Log a set and switch to Spotify: the "Rest done" banner arrives.
-4. Flip the silent switch on and log a set. Note whether the bell still rings. If it doesn't, tell the user in one line (iOS mutes web audio on silent) and don't work around it.
-5. In plain Safari (not installed), log a set: no crash, the bell rings, and Settings says "Add Ethos to the Home Screen".
+4. Mid-workout, close Ethos from the app switcher and open it again: it lands on the Workout screen at the same set.
+5. Flip the silent switch on and log a set. Note whether the bell still rings. If it doesn't, tell the user in one line (iOS mutes web audio on silent) and don't work around it.
+6. In plain Safari (not installed), log a set: no crash, the bell rings, and Settings says "Add Ethos to the Home Screen".
 - [ ] **Step 7: Commit** `"Rest bell rings on any screen, screen stays awake during a session, the workout survives a reload"`.
 
 ---
@@ -1971,7 +2079,8 @@ test('importing a backup and exporting it again gives back the same data', async
   await page.getByText('Restore from a backup file').click();
   await (await chooser).setFiles(FIXTURE);
   await page.getByRole('button', { name: 'Restore', exact: true }).click();
-  await page.goto('/settings');
+  // Tap the Dock instead of page.goto: a full reload would race the old page for the storage lock.
+  await page.locator('button', { hasText: /^Settings$/ }).click();
   const download = page.waitForEvent('download');
   await page.getByText('EXPORT').click();
   const out = JSON.parse(readFileSync(await (await download).path(), 'utf8'));
