@@ -15,3 +15,8 @@ test('transform arrays and fontVariant arrays become strings', () => {
 test('later styles win', () => {
   expect(css({ opacity: 1 }, { opacity: 0.5 })).toEqual({ opacity: 0.5 });
 });
+
+test('numeric lineHeight is pixels, like RN', () => {
+  expect(css({ lineHeight: 11 }).lineHeight).toBe('11px');
+  expect(css({ lineHeight: '1.2' }).lineHeight).toBe('1.2');
+});

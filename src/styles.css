@@ -32,3 +32,6 @@ dialog.alert p { color: var(--mute); font-size: 13px; margin: 0 0 16px; white-sp
 dialog.alert button { all: unset; display: block; width: 100%; padding: 12px 0; text-align: center; text-transform: uppercase; letter-spacing: 1px; font-size: 12px; border-top: 1px solid var(--line); cursor: pointer; }
 dialog.alert button[data-style='destructive'] { color: var(--accent); }
 dialog.alert button[data-style='cancel'] { color: var(--mute); }
+.noscrollbar { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.noscrollbar::-webkit-scrollbar { display: none; }
+.snap-kids > * { scroll-snap-align: start; }

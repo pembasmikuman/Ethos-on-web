@@ -21,7 +21,8 @@ export function css(...styles: (RN | false | null | undefined)[]): CSSProperties
       else if (/^border(Top|Bottom|Left|Right)Width$/.test(k)) { out[k] = v; out[k.replace('Width', 'Style')] = 'solid'; }
       else if (k === 'transform' && Array.isArray(v)) {
         out.transform = v.map((t: RN) => Object.entries(t).map(([f, a]) => `${f}(${f.startsWith('translate') ? px(a) : a})`).join(' ')).join(' ');
-      } else if (k === 'fontVariant' && Array.isArray(v)) out.fontVariantNumeric = v.join(' ');
+      } else if (k === 'lineHeight') out.lineHeight = px(v);
+      else if (k === 'fontVariant' && Array.isArray(v)) out.fontVariantNumeric = v.join(' ');
       else out[k] = v;
     }
   }
