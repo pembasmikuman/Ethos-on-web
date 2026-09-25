@@ -28,7 +28,8 @@ function strike(at: number): void {
 
 /** Ding-ding-ding, end of round. */
 export function ringBell(times = 3): void {
-  if (!ctx) return;
+  // Suspended (app was in the background) would queue the sound and play it late, on the next tap. Skip it.
+  if (!ctx || ctx.state !== 'running') return;
   const t0 = ctx.currentTime + 0.03;
   for (let i = 0; i < times; i++) strike(t0 + i * 0.32);
 }
