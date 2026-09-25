@@ -48,7 +48,7 @@ export default function Settings() {
       return new Promise<string>((resolve) => {
         Alert.alert('Replace everything?', `${backupSummary(b)}\n\nCurrent data is deleted first. Export a backup before this if unsure.`, [
           { text: 'Cancel', style: 'cancel', onPress: () => resolve('') },
-          { text: 'Replace', style: 'destructive', onPress: async () => { await restoreBackup(b); backupFile().then(setFile); resolve('Restored'); } },
+          { text: 'Replace', style: 'destructive', onPress: () => restoreBackup(b).then(() => { backupFile().then(setFile); resolve('Restored'); }, (e) => resolve(`Restore failed: ${e instanceof Error ? e.message : e}`)) },
         ]);
       });
     });

@@ -34,7 +34,7 @@ export default function Welcome() {
       if (!b) return;
       Alert.alert('Restore this backup?', backupSummary(b), [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Restore', onPress: async () => { await restoreBackup(b); finish(); } },
+        { text: 'Restore', onPress: () => restoreBackup(b).then(finish, (e) => Alert.alert("Couldn't restore", e instanceof Error ? e.message : String(e))) },
       ]);
     } catch (e) {
       Alert.alert('Not an Ethos backup', String(e));

@@ -72,12 +72,16 @@ export function pickBackup(): Promise<Backup | null> {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'application/json,.json';
+    // iOS only fires change for an input that is in the page, so attach it while the picker is open.
+    input.hidden = true;
+    document.body.append(input);
     input.onchange = async () => {
+      input.remove();
       const f = input.files?.[0];
       if (!f) return resolve(null);
       try { resolve(parseBackup(await f.text())); } catch (e) { reject(e); }
     };
-    input.oncancel = () => resolve(null);
+    input.oncancel = () => { input.remove(); resolve(null); };
     input.click();
   });
 }
