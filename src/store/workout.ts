@@ -19,7 +19,7 @@ type State = {
   blocks: ExerciseBlock[];
   exIdx: number;
   focus: { setIdx: number; field: Field };
-  rest: { endsAt: number; total: number; notifId: string | null } | null;
+  rest: { endsAt: number; total: number } | null;
 
   /** Load routine into a preview. No DB session, no clock. */
   preview: (routine: Routine) => Promise<void>;
@@ -64,12 +64,6 @@ async function buildBlock(ex: Exercise, targetSets: number): Promise<ExerciseBlo
 // Starts at the clock so drafts restored after a reload keep their ids and new ones land above them.
 let seq = Date.now();
 const emptySet = (weight: string, type: 'warmup' | 'working' = 'working'): SetDraft => ({ id: ++seq, type, weight, reps: '', rir: '', done: false });
-
-/** Store the push id once the server answers, unless the rest it belongs to has already changed. */
-function attachNotif(endsAt: number, notifId: string | null): void {
-  const r = useWorkout.getState().rest;
-  if (r && r.endsAt === endsAt) useWorkout.setState({ rest: { ...r, notifId } });
-}
 
 export const useWorkout = create<State>()(
   persist(
@@ -188,10 +182,10 @@ export const useWorkout = create<State>()(
     set({
       blocks: blocks.map((x, i) => (i === exIdx ? { ...x, sets } : x)),
       focus: { setIdx: nextIdx === -1 ? focus.setIdx : nextIdx, field: nextIdx === -1 ? focus.field : 'reps' },
-      rest: { endsAt, total, notifId: null },
+      rest: { endsAt, total },
     });
     // A new schedule replaces the device's pending alarm on the server, so no cancel first.
-    void scheduleRestDone(total).then((notifId) => attachNotif(endsAt, notifId));
+    void scheduleRestDone(endsAt);
   },
 
   async adjustRest(delta) {
@@ -200,8 +194,8 @@ export const useWorkout = create<State>()(
     const endsAt = Math.max(Date.now(), rest.endsAt + delta * 1000);
     const secs = Math.round((endsAt - Date.now()) / 1000);
     set({ rest: { ...rest, endsAt, total: Math.max(rest.total + delta, secs) } });
-    if (secs < 1) void cancelRestDone(rest.notifId);
-    else void scheduleRestDone(secs).then((notifId) => attachNotif(endsAt, notifId));
+    if (secs < 1) void cancelRestDone();
+    else void scheduleRestDone(endsAt);
   },
 
   restDone() {
@@ -210,13 +204,13 @@ export const useWorkout = create<State>()(
 
   async skipRest() {
     const { rest } = get();
-    void cancelRestDone(rest?.notifId ?? null);
+    if (rest) void cancelRestDone();
     set({ rest: null });
   },
 
   async cancel() {
     const { sessionId, rest } = get();
-    void cancelRestDone(rest?.notifId ?? null);
+    if (rest) void cancelRestDone();
     if (sessionId) await deleteSession(sessionId);
     set({ sessionId: null, routine: null, blocks: [], rest: null });
   },
@@ -228,7 +222,7 @@ export const useWorkout = create<State>()(
 
   async finish() {
     const { sessionId, rest } = get();
-    void cancelRestDone(rest?.notifId ?? null);
+    if (rest) void cancelRestDone();
     if (sessionId) await finishSession(sessionId);
     set({ sessionId: null, routine: null, blocks: [], rest: null });
     return sessionId;

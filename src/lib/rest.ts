@@ -37,21 +37,24 @@ function post(method: 'POST' | 'DELETE', body: object): Promise<Response> {
   return p;
 }
 
-/** Ask the server to push "Rest done" in `seconds`, replacing any pending one for this device.
- *  Returns the endpoint as the id, or null (no permission, offline, timed out). Never await this in the logging path. */
-export async function scheduleRestDone(seconds: number): Promise<string | null> {
-  if (seconds < 1) return null;
+/** Ask the server to push "Rest done" at `endsAt`, replacing any pending one for this device.
+ *  The delay is worked out when the request goes out, so a slow permission prompt doesn't make the push late.
+ *  Resolves false with no permission, offline or timed out. Never await this in the logging path. */
+export async function scheduleRestDone(endsAt: number): Promise<boolean> {
   const s = await sub;
-  if (!s) return null;
+  const seconds = Math.round((endsAt - Date.now()) / 1000);
+  if (!s || seconds < 1) return false;
   try {
-    return (await post('POST', { endpoint: s.endpoint, seconds })).ok ? s.endpoint : null;
+    return (await post('POST', { endpoint: s.endpoint, seconds })).ok;
   } catch {
-    return null;
+    return false;
   }
 }
 
-export async function cancelRestDone(id: string | null): Promise<void> {
-  if (id) await post('DELETE', { endpoint: id }).catch(() => {});
+/** Cancel this device's pending push. Keyed by the subscription, so it works even before the schedule has answered. */
+export async function cancelRestDone(): Promise<void> {
+  const s = await sub;
+  if (s) await post('DELETE', { endpoint: s.endpoint }).catch(() => {});
 }
 
 export function alertStatus(env: Env = { hasPush: hasPush(), permission: hasPush() ? Notification.permission : 'default', subscribed }): 'on' | 'off' | 'blocked' | 'unsupported' {

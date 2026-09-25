@@ -1,4 +1,4 @@
-import { beforeAll, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, expect, mock, test } from 'bun:test';
 import { bunDb } from '../db/bun';
 import { initDb } from '../db';
 import { loadKv } from '../db/kv';
@@ -6,6 +6,8 @@ import { loadKv } from '../db/kv';
 const real = await import('../lib/rest');
 const never = () => new Promise<never>(() => {});
 mock.module('../lib/rest', () => ({ ...real, scheduleRestDone: never, cancelRestDone: never }));
+// bun's module mocks are process-wide: hand the real one back so other test files get it.
+afterAll(() => { mock.module('../lib/rest', () => real); });
 
 beforeAll(async () => { await initDb(bunDb()); await loadKv(); });
 
