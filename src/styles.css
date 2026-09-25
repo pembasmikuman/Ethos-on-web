@@ -1,0 +1,34 @@
+@font-face { font-family: Doto900; src: url(/fonts/DotoRound-900.ttf); font-display: block; }
+@font-face { font-family: Doto700; src: url(/fonts/DotoRound-700.ttf); font-display: block; }
+@font-face { font-family: Mono500; src: url(/fonts/JetBrainsMono_500Medium.ttf); font-display: block; }
+@font-face { font-family: Mono600; src: url(/fonts/JetBrainsMono_600SemiBold.ttf); font-display: block; }
+
+html, body, #root { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
+body { background: var(--bg); color: var(--text); -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+input, textarea { -webkit-user-select: text; user-select: text; font: inherit; color: inherit; background: none; border: none; outline: none; padding: 0; }
+input::placeholder, textarea::placeholder { color: var(--dim); }
+
+/* Behave like React Native views so ported styles work unchanged. */
+#root div, #root button { display: flex; flex-direction: column; flex-shrink: 0; position: relative; box-sizing: border-box; min-width: 0; }
+#root button { all: unset; display: flex; flex-direction: column; flex-shrink: 0; position: relative; box-sizing: border-box; cursor: pointer; touch-action: manipulation; }
+#root button:disabled { cursor: default; }
+#root span { white-space: pre-wrap; }
+
+.scroll { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+.hscroll { flex-direction: row !important; overflow-x: auto; scrollbar-width: none; }
+.hscroll::-webkit-scrollbar, .scroll::-webkit-scrollbar { display: none; }
+.snap-x { overflow-x: auto; scroll-snap-type: x mandatory; flex-direction: row !important; scrollbar-width: none; }
+.snap-x > * { scroll-snap-align: start; }
+.snap-y { overflow-y: auto; scroll-snap-type: y mandatory; }
+.snap-y > * { scroll-snap-align: start; }
+.pr-fade:active { opacity: 0.7; }
+.pr-scale { transition: transform 120ms ease-out; }
+.pr-scale:active { transform: scale(0.97); }
+
+dialog.alert { border: 1px solid var(--line); border-radius: 18px; background: var(--card); color: var(--text); padding: 20px; width: min(320px, 86vw); font-family: Mono500, monospace; }
+dialog.alert::backdrop { background: rgba(0, 0, 0, 0.5); }
+dialog.alert h2 { font-family: Doto900, monospace; font-size: 22px; margin: 0 0 8px; }
+dialog.alert p { color: var(--mute); font-size: 13px; margin: 0 0 16px; white-space: pre-wrap; }
+dialog.alert button { all: unset; display: block; width: 100%; padding: 12px 0; text-align: center; text-transform: uppercase; letter-spacing: 1px; font-size: 12px; border-top: 1px solid var(--line); cursor: pointer; }
+dialog.alert button[data-style='destructive'] { color: var(--accent); }
+dialog.alert button[data-style='cancel'] { color: var(--mute); }
