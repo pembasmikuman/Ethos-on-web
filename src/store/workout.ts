@@ -61,7 +61,7 @@ async function buildBlock(ex: Exercise, targetSets: number): Promise<ExerciseBlo
   };
 }
 
-// Starts at the clock so drafts restored after a reload keep their ids and new ones land above them.
+// Starts at the clock, and a restored workout bumps it past every saved id, so new drafts never reuse one.
 let seq = Date.now();
 const emptySet = (weight: string, type: 'warmup' | 'working' = 'working'): SetDraft => ({ id: ++seq, type, weight, reps: '', rir: '', done: false });
 
@@ -231,6 +231,7 @@ export const useWorkout = create<State>()(
     {
       name: 'workout',
       storage: createJSONStorage(() => ({ getItem: kv.get, setItem: kv.set, removeItem: kv.del })),
+      onRehydrateStorage: () => (s) => { for (const b of s?.blocks ?? []) for (const x of b.sets) seq = Math.max(seq, x.id); },
       partialize: (s) => ({ sessionId: s.sessionId, routine: s.routine, title: s.title, startedAt: s.startedAt, blocks: s.blocks, exIdx: s.exIdx, focus: s.focus, rest: s.rest }),
     },
   ),
