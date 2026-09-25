@@ -15,6 +15,8 @@ export const router = {
   push(href: string) { history.pushState({ d: depth() + 1 }, '', href); emit(); },
   navigate(href: string) { if (location.pathname + location.search !== href) router.push(href); },
   replace(href: string) { history.replaceState({ d: depth() }, '', href); emit(); },
+  /** Pop `n` screens, as far as this app's own history goes. */
+  dismiss(n: number) { const d = Math.min(n, depth()); if (d > 0) history.go(-d); else router.replace('/'); },
   back() { if (depth() > 0) history.back(); else router.replace('/'); },
   /** Pop to the first entry and show `href` there, then optionally push `then` on top. */
   dismissTo(href: string, then?: string) {
