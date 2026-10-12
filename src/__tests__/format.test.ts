@@ -23,4 +23,7 @@ test('applyKey', () => {
   expect(applyKey('1', '-')).toBe('0');
   expect(applyKey('0', '5')).toBe('5');
   expect(applyKey('', '.')).toBe('0.');
+  expect(applyKey('100', 'lb')).toBe('45.4');
+  expect(applyKey('45', 'lb')).toBe('20.4');
+  expect(applyKey('', 'lb')).toBe('');
 });

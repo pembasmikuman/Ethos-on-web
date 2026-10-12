@@ -38,6 +38,12 @@ export function Numpad({ onKey, onDone, doneLabel = 'Done · Start rest' }: Prop
         {key('0', '0')}
         {key('.', '.', true)}
         <Pressable
+          onPress={() => onKey('lb')}
+          style={({ pressed }) => [s.key, { borderColor: t.line, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
+        >
+          <Label color={t.mute} size={11} style={{ letterSpacing: 0.5 }}>lb→kg</Label>
+        </Pressable>
+        <Pressable
           onPress={onDone}
           style={({ pressed }) => [s.key, s.done, { backgroundColor: t.accent, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
         >

@@ -78,7 +78,7 @@ export default function SessionDetail() {
 
   const onKey = (k: string) => {
     if (!edit) return;
-    if ((k === '+' || k === '-' || k === '.') && edit.field !== 'weight') return;
+    if ((k === '+' || k === '-' || k === '.' || k === 'lb') && edit.field !== 'weight') return;
     setEdit({ ...edit, [edit.field]: applyKey(edit[edit.field], k, edit.field === 'weight' ? 5 : 2) });
   };
 

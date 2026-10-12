@@ -140,7 +140,7 @@ export default function Workout() {
   const onKey = (k: string) => {
     if (!focusedSet) return;
     const max = focus.field === 'weight' ? 5 : 2;
-    if ((k === '+' || k === '-' || k === '.') && focus.field !== 'weight') return;
+    if ((k === '+' || k === '-' || k === '.' || k === 'lb') && focus.field !== 'weight') return;
     useWorkout.getState().input(applyKey(focusedSet[focus.field], k, max));
   };
   const nextField = (): 'reps' | 'rir' | null => {
@@ -159,7 +159,7 @@ export default function Workout() {
 
     if (useWorkout.getState().rest) router.navigate('/rest');
   };
-  const doneLabel = nextField() ? `Next · ${nextField()}` : 'Done · Start rest';
+  const doneLabel = nextField() ? `Next · ${nextField()}` : 'Done · Rest';
   const onFinish = () =>
     Alert.alert('End workout?', 'Finish saves it. Cancel deletes every set logged this session.', [
       { text: 'Keep going', style: 'cancel' },

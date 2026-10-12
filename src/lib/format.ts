@@ -13,6 +13,8 @@ export function fmtKg(kg: number): string {
 export function applyKey(current: string, key: string, maxLen = 5): string {
   if (key === 'del') return current.slice(0, -1);
   if (key === '.') return current.includes('.') || current.length >= maxLen ? current : current === '' ? '0.' : current + '.';
+  // Weight read off a lb machine: turn what was typed into kg, to 0.1.
+  if (key === 'lb') return current === '' ? current : fmtKg(Math.round((parseFloat(current) || 0) * 0.45359237 * 10) / 10);
   if (key === '+' || key === '-') {
     const n = parseFloat(current) || 0;
     const next = Math.max(0, n + (key === '+' ? 2.5 : -2.5));
