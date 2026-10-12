@@ -50,12 +50,13 @@ export async function prevSets(exerciseId: string): Promise<LoggedSet[]> {
   );
 }
 
-export async function startSession(routine: Routine): Promise<string> {
+/** A null routine starts a session that follows no routine, under `title`. */
+export async function startSession(routine: Routine | null, title = routine?.name ?? ''): Promise<string> {
   const db = await getDb();
   const id = crypto.randomUUID();
   await db.runAsync(
     'INSERT INTO workout_sessions (id, routine_id, title, start_time) VALUES (?, ?, ?, ?)',
-    [id, routine.id, routine.name, new Date().toISOString()],
+    [id, routine?.id ?? null, title, new Date().toISOString()],
   );
   return id;
 }

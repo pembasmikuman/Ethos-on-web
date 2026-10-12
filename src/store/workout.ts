@@ -30,6 +30,8 @@ type State = {
   preview: (routine: Routine) => Promise<void>;
   /** Start the DB session and clock for the previewed routine. */
   begin: () => Promise<void>;
+  /** Start a workout that follows no routine: empty, already running. */
+  beginFree: () => Promise<void>;
   /** Insert exercise after current, or swap current (drops its unlogged sets). */
   addExercise: (ex: Exercise, swap?: boolean) => Promise<void>;
   removeExercise: (i: number) => void;
@@ -97,6 +99,12 @@ export const useWorkout = create<State>()(
     set({ sessionId: await startSession(routine), startedAt: Date.now() });
   },
 
+  async beginFree() {
+    if (get().sessionId) return;
+    const title = 'Freestyle';
+    set({ sessionId: await startSession(null, title), routine: null, plan: null, title, startedAt: Date.now(), blocks: [], exIdx: 0, focus: { setIdx: 0, field: 'weight' }, rest: null });
+  },
+
   async addExercise(ex, swap = false) {
     const { blocks, exIdx } = get();
     const cur = blocks[exIdx];
@@ -104,7 +112,7 @@ export const useWorkout = create<State>()(
     // A swap takes over the old block's routine row. With logged sets the old block stays so they remain visible.
     if (swap && cur) block.reId = cur.reId;
     const replace = swap && cur && !cur.sets.some((x) => x.done);
-    const idx = replace ? exIdx : exIdx + 1;
+    const idx = replace ? exIdx : Math.min(exIdx + 1, blocks.length);
     const next = swap && cur && !replace ? blocks.map((b, i) => (i === exIdx ? { ...b, replaced: true } : b)) : [...blocks];
     next.splice(idx, replace ? 1 : 0, block);
     set({ blocks: next, exIdx: idx, focus: { setIdx: 0, field: 'weight' } });

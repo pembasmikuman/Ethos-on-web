@@ -24,7 +24,7 @@ export default function Session() {
   const drag = useDragList();
   const [now] = useState(Date.now());
 
-  if (blocks.length === 0) return <View style={{ flex: 1, backgroundColor: t.bg }} />;
+  if (blocks.length === 0 && sessionId === null) return <View style={{ flex: 1, backgroundColor: t.bg }} />;
 
   const started = sessionId !== null;
   const open = async (i: number) => { if (!started) await w.begin(); w.setExercise(i); router.push('/workout'); };

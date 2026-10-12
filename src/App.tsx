@@ -20,7 +20,8 @@ export function App() {
     document.documentElement.style.colorScheme = scheme;
   }, [t, scheme]);
   // iOS may relaunch an evicted home-screen app at start_url, so send an unfinished workout back to its screen.
-  useEffect(() => { if (useWorkout.getState().sessionId && location.pathname === '/') router.replace('/workout'); }, []);
+  // One with no exercises yet goes to the overview, since the logging screen has nothing to show.
+  useEffect(() => { const w = useWorkout.getState(); if (w.sessionId && location.pathname === '/') router.replace(w.blocks.length ? '/workout' : '/session'); }, []);
   const active = useWorkout((s) => s.sessionId !== null);
   useWakeLock(active);
   useRestAlarm();

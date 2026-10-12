@@ -63,6 +63,12 @@ export default function Home() {
     }
   };
 
+  const free = async () => {
+    if (busy) return;
+    if (!active) await useWorkout.getState().beginFree();
+    router.push('/session');
+  };
+
   if (!onboarded) return <Redirect href="/welcome" />;
   const nextIds = upNext(routines);
   const today = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
@@ -184,6 +190,10 @@ export default function Home() {
         </View>
       ))}
 
+      <Pressable onPress={free} style={({ pressed }) => [s.free, { borderColor: t.line, opacity: pressed ? 0.7 : 1 }]}>
+        <Label color={t.accent}>{active ? 'Resume workout' : '+ Empty workout'}</Label>
+      </Pressable>
+
       {recent.length > 0 && <Label style={s.section}>Recent</Label>}
       {recent.map((r) => {
         const mins = r.end_time ? Math.round((new Date(r.end_time).getTime() - new Date(r.start_time).getTime()) / 60000) : 0;
@@ -205,6 +215,7 @@ const s = StyleSheet.create({
   page: { paddingHorizontal: 16, gap: 8 },
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 4, paddingBottom: 12 },
   section: { paddingHorizontal: 4, paddingTop: 12, paddingBottom: 4 },
+  free: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, padding: 18, alignItems: 'center' },
   card: { padding: 14, borderRadius: 16, borderWidth: 1, gap: 8 },
   day: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1, minHeight: 56 },
   panel: { padding: 16, borderRadius: 16, borderWidth: 1, gap: 12 },
