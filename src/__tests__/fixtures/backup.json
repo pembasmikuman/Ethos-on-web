@@ -1,6 +1,6 @@
 {
   "app": "ethos", "version": 1, "exported_at": "2026-09-01T10:00:00.000Z",
-  "exercises": [{ "id": "bench", "name": "Barbell Bench Press", "primary_muscle": "chest", "secondary_muscles": "triceps,delts", "equipment": "barbell", "default_rest_seconds": 210, "target_rep_min": 5, "target_rep_max": 8, "increment_kg": 2.5, "brand": "", "movement": "Chest Press", "library_id": "", "progression": "double", "load": "weight", "per_side": 0, "notes": "" }],
+  "exercises": [{ "id": "bench", "name": "Barbell Bench Press", "primary_muscle": "chest", "secondary_muscles": "triceps,delts", "equipment": "barbell", "default_rest_seconds": 210, "target_rep_min": 5, "target_rep_max": 8, "increment_kg": 2.5, "brand": "", "movement": "Chest Press", "library_id": "", "progression": "double", "load": "weight", "per_side": 0, "notes": "", "tuned": "" }],
   "routines": [{ "id": "r1", "name": "Day A", "notes": null, "created_at": "2026-08-01 00:00:00", "plan": "UL", "plan_order": 0 }],
   "routine_exercises": [{ "id": "re1", "routine_id": "r1", "exercise_id": "bench", "order_index": 0, "target_sets": 3 }],
   "workout_sessions": [{ "id": "s1", "routine_id": "r1", "title": "UL · Day A", "start_time": "2026-09-01T09:00:00.000Z", "end_time": "2026-09-01T10:00:00.000Z", "notes": "ok" }],

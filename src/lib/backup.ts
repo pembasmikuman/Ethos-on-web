@@ -1,4 +1,5 @@
 import { getDb } from '../db';
+import { MARK_TUNED } from '../db/migrations';
 import { useWorkout } from '../store/workout';
 import { cancelRestDone } from './rest';
 
@@ -34,6 +35,8 @@ export async function restoreBackup(b: Backup): Promise<void> {
       }
     }
     for (const [name, b64] of Object.entries(b.photo_files ?? {})) await db.runAsync('INSERT INTO photo_files (name, b64) VALUES (?, ?)', [name, b64]);
+    // A backup from before Setup carries no tuned column, so read its tweaks the way the migration did.
+    if (!b.exercises.some((r) => 'tuned' in r)) await db.execAsync(MARK_TUNED);
   });
   // The restore wiped any session in progress, so the workout screen lets go of it too.
   if (useWorkout.getState().rest) void cancelRestDone();

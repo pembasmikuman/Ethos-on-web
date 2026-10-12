@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from '../lib/nav';
+import { router, useFocusEffect } from '../lib/nav';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from '../rn';
 import { useSafeAreaInsets } from '../lib/insets';
 import { useTheme, useTopInset } from '../lib/theme';
@@ -83,6 +83,8 @@ export default function Settings() {
           );
         })}
       </View>
+      <Label style={s.section}>Training</Label>
+      {row('SETUP', 'Rule, rep range, rest and weight jump for every exercise', () => router.push('/setup'))}
       <Label style={s.section}>Backup</Label>
       {row('EXPORT', 'Save a JSON snapshot to Files, iCloud or Drive', () => file && run('export', () => shareFile(file)), false, !file)}
       {row('RESTORE', 'Pick a backup file. Replaces all current data.', onRestore, true)}

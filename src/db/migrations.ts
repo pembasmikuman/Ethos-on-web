@@ -1,4 +1,22 @@
 import type { Db as SQLiteDatabase } from './driver';
+import { EXERCISES } from './seed';
+
+const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
+/**
+ * For data from before Setup: mark as tuned each setting that differs from what the exercise started with,
+ * its seed row for starter exercises, else the old column defaults (double, 8-12, 120s, 2.5 kg).
+ * Only run it on such data: once Setup has moved an exercise, it differs from its start without being tuned.
+ */
+export const MARK_TUNED = `
+  WITH start(id, rest, lo, hi, inc) AS (VALUES ${EXERCISES.map((r) => `(${q(r[0])}, ${r[5]}, ${r[6]}, ${r[7]}, ${r[8]})`).join(', ')})
+  UPDATE exercises SET tuned = rtrim(
+    CASE WHEN progression <> 'double' THEN 'rule,' ELSE '' END ||
+    CASE WHEN target_rep_min <> COALESCE((SELECT lo FROM start WHERE start.id = exercises.id), 8)
+           OR target_rep_max <> COALESCE((SELECT hi FROM start WHERE start.id = exercises.id), 12) THEN 'reps,' ELSE '' END ||
+    CASE WHEN default_rest_seconds <> COALESCE((SELECT rest FROM start WHERE start.id = exercises.id), 120) THEN 'rest,' ELSE '' END ||
+    CASE WHEN increment_kg <> COALESCE((SELECT inc FROM start WHERE start.id = exercises.id), 2.5) THEN 'increment,' ELSE '' END,
+  ',') WHERE tuned = '';
+`;
 
 /** Ordered list. Never edit a shipped entry; append a new one. */
 const MIGRATIONS: string[] = [
@@ -123,6 +141,8 @@ const MIGRATIONS: string[] = [
   `,
   // A short note per set, typed while logging ("failed on 7", "belt").
   `ALTER TABLE logged_sets ADD COLUMN notes TEXT NOT NULL DEFAULT '';`,
+  // Settings the user changed on this exercise ("reps,rest"), which Setup then leaves alone.
+  `ALTER TABLE exercises ADD COLUMN tuned TEXT NOT NULL DEFAULT '';` + MARK_TUNED,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

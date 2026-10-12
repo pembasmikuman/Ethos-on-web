@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import Home from './screens/Home';
 import Welcome from './screens/Welcome';
 import Settings from './screens/Settings';
+import Setup from './screens/Setup';
 import Exercises from './screens/Exercises';
 import NewExercise from './screens/NewExercise';
 import ExerciseDetail from './screens/ExerciseDetail';
@@ -18,6 +19,7 @@ export const ROUTES: [string, ComponentType][] = [
   ['/', Home],
   ['/welcome', Welcome],
   ['/settings', Settings],
+  ['/setup', Setup],
   ['/exercises', Exercises],
   ['/exercise/new', NewExercise],
   ['/exercise/:id', ExerciseDetail],

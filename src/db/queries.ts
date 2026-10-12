@@ -1,8 +1,9 @@
 import { getDb, type Exercise, type Load, type Progression } from './index';
 import type { Change } from '../lib/routineChanges';
+import { getSetup, storeSetup, type Setup } from '../lib/setup';
 
 /** Exercise columns with brand folded into name for display. Use exerciseById for the raw parts. */
-const EX = (a: string) => `${a}.id, ${a}.name AS base, CASE WHEN ${a}.brand <> '' THEN ${a}.name || ' · ' || ${a}.brand ELSE ${a}.name END AS name, ${a}.brand, ${a}.movement, ${a}.primary_muscle, ${a}.secondary_muscles, ${a}.equipment, ${a}.default_rest_seconds, ${a}.target_rep_min, ${a}.target_rep_max, ${a}.increment_kg, ${a}.library_id, ${a}.progression, ${a}.load, ${a}.per_side, ${a}.notes`;
+const EX = (a: string) => `${a}.id, ${a}.name AS base, CASE WHEN ${a}.brand <> '' THEN ${a}.name || ' · ' || ${a}.brand ELSE ${a}.name END AS name, ${a}.brand, ${a}.movement, ${a}.primary_muscle, ${a}.secondary_muscles, ${a}.equipment, ${a}.default_rest_seconds, ${a}.target_rep_min, ${a}.target_rep_max, ${a}.increment_kg, ${a}.library_id, ${a}.progression, ${a}.load, ${a}.per_side, ${a}.notes, ${a}.tuned`;
 
 export type Routine = { id: string; name: string; plan: string; plan_order: number; exercises: number; last_done: string | null };
 export type LoggedSet = {
@@ -303,13 +304,44 @@ export async function exerciseById(id: string): Promise<Exercise | null> {
   return db.getFirstAsync<Exercise>('SELECT * FROM exercises WHERE id = ?', [id]);
 }
 
-export type ExerciseSettings = Pick<Exercise, 'default_rest_seconds' | 'target_rep_min' | 'target_rep_max' | 'increment_kg' | 'progression'>;
+export type ExerciseSettings = Pick<Exercise, 'default_rest_seconds' | 'target_rep_min' | 'target_rep_max' | 'increment_kg' | 'progression' | 'tuned'>;
 
 export async function updateExercise(id: string, s: ExerciseSettings): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    'UPDATE exercises SET default_rest_seconds = ?, target_rep_min = ?, target_rep_max = ?, increment_kg = ?, progression = ? WHERE id = ?',
-    [s.default_rest_seconds, s.target_rep_min, s.target_rep_max, s.increment_kg, s.progression, id],
+    'UPDATE exercises SET default_rest_seconds = ?, target_rep_min = ?, target_rep_max = ?, increment_kg = ?, progression = ?, tuned = ? WHERE id = ?',
+    [s.default_rest_seconds, s.target_rep_min, s.target_rep_max, s.increment_kg, s.progression, s.tuned, id],
+  );
+}
+
+/** `tuned` holds `field` as a whole item of its comma list. */
+const tunedHas = (field: string) => `instr(',' || tuned || ',', ',${field},') > 0`;
+
+/** Push Setup onto every exercise, one setting at a time, skipping the ones tuned there. Remembers Setup for new exercises. */
+export async function applySetup(s: Setup): Promise<void> {
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`UPDATE exercises SET progression = ? WHERE NOT ${tunedHas('rule')}`, [s.rule]);
+    await db.runAsync(`UPDATE exercises SET target_rep_min = ?, target_rep_max = ? WHERE NOT ${tunedHas('reps')} AND load <> 'time'`, [s.repMin, s.repMax]);
+    await db.runAsync(`UPDATE exercises SET default_rest_seconds = ? WHERE NOT ${tunedHas('rest')}`, [s.rest]);
+    await db.runAsync(`UPDATE exercises SET increment_kg = ? WHERE NOT ${tunedHas('increment')}`, [s.increment]);
+  });
+  storeSetup(s);
+}
+
+/** How many exercises Setup reaches, and how many keep at least one setting of their own. */
+export async function setupReach(): Promise<{ total: number; tuned: number }> {
+  const db = await getDb();
+  return (await db.getFirstAsync<{ total: number; tuned: number }>(`SELECT COUNT(*) AS total, COALESCE(SUM(tuned <> ''), 0) AS tuned FROM exercises`))!;
+}
+
+/** Drop everything tuned on one exercise and put it back on Setup. */
+export async function resetToSetup(id: string): Promise<void> {
+  const s = getSetup();
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE exercises SET progression = ?, target_rep_min = ?, target_rep_max = ?, default_rest_seconds = ?, increment_kg = ?, tuned = '' WHERE id = ?`,
+    [s.rule, s.repMin, s.repMax, s.rest, s.increment, id],
   );
 }
 
@@ -323,9 +355,13 @@ export type ExerciseIdentity = { name: string; brand: string; movement: string; 
 export async function createExercise(e: ExerciseIdentity): Promise<string> {
   const db = await getDb();
   const id = crypto.randomUUID();
+  const s = getSetup();
+  // Timed exercises keep reps as seconds, so they keep the column's 8-12 instead of Setup's rep range.
+  const [repMin, repMax] = e.load === 'time' ? [8, 12] : [s.repMin, s.repMax];
   await db.runAsync(
-    'INSERT INTO exercises (id, name, brand, movement, primary_muscle, equipment, secondary_muscles, library_id, load, per_side) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, e.name, e.brand, e.movement, e.primary_muscle, e.equipment, e.secondary_muscles ?? '', e.library_id ?? '', e.load ?? 'weight', e.per_side ?? 0],
+    `INSERT INTO exercises (id, name, brand, movement, primary_muscle, equipment, secondary_muscles, library_id, load, per_side, progression, target_rep_min, target_rep_max, default_rest_seconds, increment_kg)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, e.name, e.brand, e.movement, e.primary_muscle, e.equipment, e.secondary_muscles ?? '', e.library_id ?? '', e.load ?? 'weight', e.per_side ?? 0, s.rule, repMin, repMax, s.rest, s.increment],
   );
   return id;
 }
@@ -335,8 +371,8 @@ export async function duplicateExercise(id: string): Promise<string> {
   const db = await getDb();
   const nid = crypto.randomUUID();
   await db.runAsync(
-    `INSERT INTO exercises (id, name, brand, movement, primary_muscle, secondary_muscles, equipment, default_rest_seconds, target_rep_min, target_rep_max, increment_kg, library_id, progression, load, per_side)
-     SELECT ?, name, brand, movement, primary_muscle, secondary_muscles, equipment, default_rest_seconds, target_rep_min, target_rep_max, increment_kg, library_id, progression, load, per_side FROM exercises WHERE id = ?`,
+    `INSERT INTO exercises (id, name, brand, movement, primary_muscle, secondary_muscles, equipment, default_rest_seconds, target_rep_min, target_rep_max, increment_kg, library_id, progression, load, per_side, tuned)
+     SELECT ?, name, brand, movement, primary_muscle, secondary_muscles, equipment, default_rest_seconds, target_rep_min, target_rep_max, increment_kg, library_id, progression, load, per_side, tuned FROM exercises WHERE id = ?`,
     [nid, id],
   );
   return nid;

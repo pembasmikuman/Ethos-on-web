@@ -59,7 +59,7 @@ export default function Welcome() {
 
       <View style={{ flex: 1 }} />
 
-      <Pressable onPress={finish} style={({ pressed }) => [s.primary, { backgroundColor: t.accent, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
+      <Pressable onPress={() => router.push('/setup?first=1')} style={({ pressed }) => [s.primary, { backgroundColor: t.accent, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
         <Doto size={24} color={t.bg}>START</Doto>
         <Label color={t.bg}>Starter PPL · edit anytime</Label>
       </Pressable>

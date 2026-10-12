@@ -18,6 +18,8 @@ export type Exercise = {
   load: Load;
   per_side: number;
   notes: string;
+  /** Settings changed on this exercise that Setup leaves alone, comma separated: rule, reps, rest, increment. */
+  tuned: string;
 };
 
 export type Progression = 'double' | 'linear' | 'greyskull';

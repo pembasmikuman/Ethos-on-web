@@ -3,7 +3,9 @@ import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from '../rn
 import { router, useFocusEffect, useLocalSearchParams } from '../lib/nav';
 import { useSafeAreaInsets } from '../lib/insets';
 import type { Exercise } from '../db';
-import { deleteExercise, duplicateExercise, exerciseById, exerciseHistory, setExerciseNotes, updateExercise, type ExerciseSettings } from '../db/queries';
+import { deleteExercise, duplicateExercise, exerciseById, exerciseHistory, resetToSetup, setExerciseNotes, updateExercise, type ExerciseSettings } from '../db/queries';
+import { withTuned, type SetupField } from '../lib/setup';
+import { RulePicker, Stepper } from '../components/Stepper';
 import { epley1RM } from '../lib/progression';
 import { fmtKg } from '../lib/format';
 import { fonts, useTheme, useTopInset } from '../lib/theme';
@@ -11,29 +13,10 @@ import { Doto, Label } from '../components/Text';
 import { DotTrend } from '../components/DotTrend';
 import { DOCK_HEIGHT } from '../components/Dock';
 import { libraryEntry } from '../lib/library';
-import type { Progression } from '../db';
 
-const RULES: [Progression, string][] = [['double', 'double'], ['linear', 'linear'], ['greyskull', 'greyskull']];
-const RULE_HINT: Record<Progression, string> = {
-  double: 'All sets at rep max with RIR, then add weight',
-  linear: 'All sets at rep min, then add weight every session',
-  greyskull: 'Last set AMRAP. 2x min = double jump. Miss = -10 %',
-};
 
 type Hist = Awaited<ReturnType<typeof exerciseHistory>>;
 
-function Stepper({ label, value, onChange }: { label: string; value: string; onChange: (d: -1 | 1) => void }) {
-  const t = useTheme();
-  const tap = (d: -1 | 1) => onChange(d);
-  return (
-    <View style={[s.setting, { borderBottomColor: t.line }]}>
-      <Label style={{ flex: 1 }}>{label}</Label>
-      <Pressable onPress={() => tap(-1)} hitSlop={8} style={s.key}><Doto size={20} color={t.mute}>−</Doto></Pressable>
-      <Doto size={22} style={{ minWidth: 64, textAlign: 'center' }}>{value}</Doto>
-      <Pressable onPress={() => tap(1)} hitSlop={8} style={s.key}><Doto size={20} color={t.mute}>+</Doto></Pressable>
-    </View>
-  );
-}
 
 export default function ExerciseDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -50,11 +33,14 @@ export default function ExerciseDetail() {
 
   if (!ex) return <View style={{ flex: 1, backgroundColor: t.bg }} />;
 
-  const patch = (p: Partial<ExerciseSettings>) => {
-    const next = { ...ex, ...p };
+  /** Change settings here, which takes `field` off Setup for this exercise. */
+  const patch = (field: SetupField, p: Partial<ExerciseSettings>) => {
+    const next = { ...ex, ...p, tuned: withTuned(ex.tuned, field) };
     setEx(next);
     updateExercise(id, next);
   };
+
+  const own = (f: SetupField) => (ex.tuned.split(',').includes(f) ? 'your own' : undefined);
 
   const onMenu = () =>
     Alert.alert(ex.name, undefined, [
@@ -102,20 +88,15 @@ export default function ExerciseDetail() {
       </View>
 
       <Label style={s.section}>Settings</Label>
-      <Stepper label="Rest" value={`${ex.default_rest_seconds}s`} onChange={(d) => patch({ default_rest_seconds: Math.max(30, ex.default_rest_seconds + d * 15) })} />
-      <Stepper label="Increment" value={`${fmtKg(ex.increment_kg)} kg`} onChange={(d) => patch({ increment_kg: Math.max(0.5, ex.increment_kg + d * 0.5) })} />
-      <Stepper label="Reps min" value={`${ex.target_rep_min}`} onChange={(d) => patch({ target_rep_min: Math.max(1, Math.min(ex.target_rep_max - 1, ex.target_rep_min + d)) })} />
-      <Stepper label="Reps max" value={`${ex.target_rep_max}`} onChange={(d) => patch({ target_rep_max: Math.max(ex.target_rep_min + 1, ex.target_rep_max + d) })} />
-      {ex.load !== 'bodyweight' && (
-        <View style={[s.setting, { borderBottomColor: t.line, height: undefined, paddingVertical: 12, flexWrap: 'wrap' }]}>
-          <Label style={{ flex: 1, minWidth: 90 }}>Rule</Label>
-          {RULES.map(([r, label]) => (
-            <Pressable key={r} onPress={() => patch({ progression: r })} style={[s.chip, { borderColor: ex.progression === r ? t.accent : t.line, backgroundColor: ex.progression === r ? t.accent : 'transparent' }]}>
-              <Label color={ex.progression === r ? t.bg : t.mute}>{label}</Label>
-            </Pressable>
-          ))}
-          <Label color={t.dim} size={10} style={{ width: '100%', paddingTop: 8 }}>{RULE_HINT[ex.progression]}</Label>
-        </View>
+      <Stepper label="Rest" note={own('rest')} value={`${ex.default_rest_seconds}s`} onChange={(d) => patch('rest', { default_rest_seconds: Math.max(30, ex.default_rest_seconds + d * 15) })} />
+      <Stepper label="Increment" note={own('increment')} value={`${fmtKg(ex.increment_kg)} kg`} onChange={(d) => patch('increment', { increment_kg: Math.max(0.5, ex.increment_kg + d * 0.5) })} />
+      <Stepper label="Reps min" note={own('reps')} value={`${ex.target_rep_min}`} onChange={(d) => patch('reps', { target_rep_min: Math.max(1, Math.min(ex.target_rep_max - 1, ex.target_rep_min + d)) })} />
+      <Stepper label="Reps max" note={own('reps')} value={`${ex.target_rep_max}`} onChange={(d) => patch('reps', { target_rep_max: Math.max(ex.target_rep_min + 1, ex.target_rep_max + d) })} />
+      {ex.load !== 'bodyweight' && <RulePicker label="Rule" value={ex.progression} note={own('rule')} onChange={(r) => patch('rule', { progression: r })} />}
+      {ex.tuned !== '' && (
+        <Pressable onPress={async () => { await resetToSetup(id); setEx(await exerciseById(id)); }} hitSlop={8} style={{ alignSelf: 'flex-start', paddingHorizontal: 4, paddingTop: 12 }}>
+          <Label color={t.accent}>Use Setup for all of these</Label>
+        </Pressable>
       )}
       {(ex.load !== 'weight' || ex.per_side === 1) && <Label color={t.dim} style={{ paddingHorizontal: 4, paddingTop: 10 }}>{[ex.load === 'bodyweight' ? 'bodyweight, progress in reps' : ex.load === 'time' ? 'timed, seconds instead of reps' : '', ex.per_side === 1 ? 'reps per side' : ''].filter(Boolean).join(' · ')}</Label>}
 
@@ -144,8 +125,5 @@ const s = StyleSheet.create({
   notes: { fontFamily: fonts.mono, fontSize: 14, lineHeight: 20, minHeight: 56, marginTop: 14, padding: 12, borderRadius: 12, borderWidth: 1, textAlignVertical: 'top' },
   panel: { marginTop: 18, borderWidth: 1, borderRadius: 14, padding: 16, gap: 14 },
   section: { paddingHorizontal: 4, paddingTop: 22, paddingBottom: 6 },
-  setting: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, borderBottomWidth: 1, height: 56 },
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
-  key: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4, paddingVertical: 12, borderBottomWidth: 1 },
 });

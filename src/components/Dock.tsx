@@ -52,6 +52,7 @@ export function Dock() {
   const rest = useWorkout((s) => s.rest);
   const startedAt = useWorkout((s) => s.startedAt);
   const hidden = useUi((s) => s.dockHidden);
+  const onboarded = useUi((s) => s.onboarded);
   const [now, setNow] = useState(Date.now());
 
   const ITEMS = active ? ALL_ITEMS : ALL_ITEMS.filter((i) => i.key !== 'log');
@@ -107,7 +108,7 @@ export function Dock() {
   const restLeft = rest ? Math.round((rest.endsAt - now) / 1000) : 0;
   const status = !active ? null : restLeft > 0 ? fmtClock(restLeft) : fmtClock((now - startedAt) / 1000);
 
-  if (path === '/welcome') return null;
+  if (!onboarded || path === '/welcome') return null;
   return (
     <div
       style={css(s.wrap, {
