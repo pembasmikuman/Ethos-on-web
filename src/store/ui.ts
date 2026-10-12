@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import { kv } from '../db/kv';
+import type { Change } from '../lib/routineChanges';
+
+/** What a finished workout changed against its routine, waiting for the summary screen to offer it. */
+export type PendingChanges = { sessionId: string; routineId: string; routineName: string; changes: Change[]; order: { reId?: string; exerciseId: string }[] };
 
 export type Appearance = 'system' | 'dark' | 'light';
 export type Panel = 'volume' | 'days' | 'map';
@@ -23,6 +27,9 @@ type Ui = {
   pendingExercise: string | null;
   setPendingExercise: (id: string) => void;
   clearPendingExercise: () => void;
+  /** Not persisted either: if the app is closed before answering, the offer is dropped. */
+  pendingChanges: PendingChanges | null;
+  setPendingChanges: (p: PendingChanges | null) => void;
 };
 
 const DEFAULT_MUSCLES = ['chest', 'back', 'quads', 'hamstrings', 'delts', 'biceps', 'triceps'];
@@ -56,6 +63,8 @@ export const useUi = create<Ui>((set) => ({
   pendingExercise: null,
   setPendingExercise: (pendingExercise) => set({ pendingExercise }),
   clearPendingExercise: () => set({ pendingExercise: null }),
+  pendingChanges: null,
+  setPendingChanges: (pendingChanges) => set({ pendingChanges }),
   onboarded: kv.get('onboarded') === '1',
   setOnboarded: () => { kv.set('onboarded', '1'); set({ onboarded: true }); },
   volumeMuscles: initialMuscles,

@@ -37,7 +37,7 @@ export async function restoreBackup(b: Backup): Promise<void> {
   });
   // The restore wiped any session in progress, so the workout screen lets go of it too.
   if (useWorkout.getState().rest) void cancelRestDone();
-  useWorkout.setState({ sessionId: null, routine: null, blocks: [], rest: null });
+  useWorkout.setState({ sessionId: null, routine: null, plan: null, blocks: [], rest: null });
 }
 
 export function backupSummary(b: Backup): string {

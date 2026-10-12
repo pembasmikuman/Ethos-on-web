@@ -1,4 +1,5 @@
 import { getDb, type Exercise, type Load, type Progression } from './index';
+import type { Change } from '../lib/routineChanges';
 
 /** Exercise columns with brand folded into name for display. Use exerciseById for the raw parts. */
 const EX = (a: string) => `${a}.id, ${a}.name AS base, CASE WHEN ${a}.brand <> '' THEN ${a}.name || ' · ' || ${a}.brand ELSE ${a}.name END AS name, ${a}.brand, ${a}.movement, ${a}.primary_muscle, ${a}.secondary_muscles, ${a}.equipment, ${a}.default_rest_seconds, ${a}.target_rep_min, ${a}.target_rep_max, ${a}.increment_kg, ${a}.library_id, ${a}.progression, ${a}.load, ${a}.per_side, ${a}.notes`;
@@ -24,10 +25,10 @@ export async function listRoutines(): Promise<Routine[]> {
      FROM routines r ORDER BY r.plan, r.plan_order, r.name`);
 }
 
-export async function routineExercises(routineId: string): Promise<(Exercise & { target_sets: number })[]> {
+export async function routineExercises(routineId: string): Promise<(Exercise & { target_sets: number; re_id: string })[]> {
   const db = await getDb();
   return db.getAllAsync(
-    `SELECT ${EX('e')}, re.target_sets FROM routine_exercises re
+    `SELECT ${EX('e')}, re.target_sets, re.id AS re_id FROM routine_exercises re
      JOIN exercises e ON e.id = re.exercise_id
      WHERE re.routine_id = ? ORDER BY re.order_index`,
     [routineId],
@@ -217,13 +218,16 @@ export async function routineExerciseRows(routineId: string): Promise<RoutineExe
   );
 }
 
-export async function addRoutineExercise(routineId: string, exerciseId: string): Promise<void> {
+/** Appends to the end of the routine. Returns the new routine_exercises id. */
+export async function addRoutineExercise(routineId: string, exerciseId: string, sets = 3): Promise<string> {
   const db = await getDb();
+  const id = crypto.randomUUID();
   const row = await db.getFirstAsync<{ n: number }>('SELECT COALESCE(MAX(order_index), -1) + 1 AS n FROM routine_exercises WHERE routine_id = ?', [routineId]);
   await db.runAsync(
-    'INSERT INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets) VALUES (?, ?, ?, ?, 3)',
-    [crypto.randomUUID(), routineId, exerciseId, row?.n ?? 0],
+    'INSERT INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets) VALUES (?, ?, ?, ?, ?)',
+    [id, routineId, exerciseId, row?.n ?? 0, sets],
   );
+  return id;
 }
 
 export async function removeRoutineExercise(reId: string): Promise<void> {
@@ -247,6 +251,30 @@ export async function reorderRoutine(reIds: string[]): Promise<void> {
 export async function replaceRoutineExercise(reId: string, exerciseId: string): Promise<void> {
   const db = await getDb();
   await db.runAsync('UPDATE routine_exercises SET exercise_id = ? WHERE id = ?', [exerciseId, reId]);
+}
+
+/** Writes the picked changes from a finished workout into its routine. `order` is the workout's
+ *  exercises in order: each its routine row id, or its exercise id when added that session.
+ *  Added exercises go where they sat in the workout; the rest keep their order unless 'order' was picked. */
+export async function applyRoutineChanges(routineId: string, picked: Change[], order: { reId?: string; exerciseId: string }[]): Promise<void> {
+  const added = new Map<string, string>();
+  for (const c of picked) {
+    if (c.kind === 'swap') await replaceRoutineExercise(c.reId, c.exerciseId);
+    else if (c.kind === 'sets') await setTargetSets(c.reId, c.sets);
+    else if (c.kind === 'remove') await removeRoutineExercise(c.reId);
+    else if (c.kind === 'add') added.set(c.exerciseId, await addRoutineExercise(routineId, c.exerciseId, c.sets));
+  }
+  const rows = (await routineExerciseRows(routineId)).map((r) => r.re_id);
+  const fresh = new Set(added.values());
+  const ids = order.flatMap((o) => o.reId ?? added.get(o.exerciseId) ?? []).filter((id) => rows.includes(id));
+  let out: string[];
+  if (picked.some((c) => c.kind === 'order')) out = [...ids, ...rows.filter((id) => !ids.includes(id))];
+  else {
+    out = rows.filter((id) => !fresh.has(id));
+    let prev: string | undefined;
+    for (const id of ids) { if (fresh.has(id)) out.splice(prev ? out.indexOf(prev) + 1 : 0, 0, id); prev = id; }
+  }
+  await reorderRoutine(out);
 }
 
 // ---- Exercise detail ----

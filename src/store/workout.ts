@@ -6,14 +6,19 @@ import { deleteSession, finishSession, insertSet, recentExerciseSessions, routin
 import { nextWeight, stalled, warmupRamp } from '../lib/progression';
 import { cancelRestDone, ensurePush, scheduleRestDone } from '../lib/rest';
 import { fmtKg } from '../lib/format';
+import { routineChanges, type PlanRow } from '../lib/routineChanges';
+import { useUi } from './ui';
 
 export type Field = 'weight' | 'reps' | 'rir';
 export type SetDraft = { id: number; type: 'warmup' | 'working'; weight: string; reps: string; rir: string; done: boolean };
-export type ExerciseBlock = { exercise: Exercise; sets: SetDraft[]; prev: LoggedSet[]; overload: boolean; deload: boolean; why: string; stalled: boolean };
+/** `reId`: the routine row this block stands in for, none when added this session. `replaced`: swapped out after sets were logged, kept only to show them. */
+export type ExerciseBlock = { exercise: Exercise; sets: SetDraft[]; prev: LoggedSet[]; overload: boolean; deload: boolean; why: string; stalled: boolean; reId?: string; replaced?: boolean };
 
 type State = {
   sessionId: string | null;
   routine: Routine | null;
+  /** The routine as it was at preview, to spot what this workout changed. Null for a routine-free workout. */
+  plan: PlanRow[] | null;
   title: string;
   startedAt: number;
   blocks: ExerciseBlock[];
@@ -70,6 +75,7 @@ export const useWorkout = create<State>()(
     (set, get) => ({
   sessionId: null,
   routine: null,
+  plan: null,
   title: '',
   startedAt: 0,
   blocks: [],
@@ -80,8 +86,9 @@ export const useWorkout = create<State>()(
   async preview(routine) {
     const exs = await routineExercises(routine.id);
     const blocks: ExerciseBlock[] = [];
-    for (const ex of exs) blocks.push(await buildBlock(ex, ex.target_sets));
-    set({ sessionId: null, routine, title: routine.plan ? `${routine.plan} · ${routine.name}` : routine.name, startedAt: 0, blocks, exIdx: 0, focus: { setIdx: 0, field: 'weight' }, rest: null });
+    for (const ex of exs) blocks.push({ ...(await buildBlock(ex, ex.target_sets)), reId: ex.re_id });
+    const plan = exs.map((ex) => ({ reId: ex.re_id, exerciseId: ex.id, name: ex.name, sets: ex.target_sets }));
+    set({ sessionId: null, routine, plan, title: routine.plan ? `${routine.plan} · ${routine.name}` : routine.name, startedAt: 0, blocks, exIdx: 0, focus: { setIdx: 0, field: 'weight' }, rest: null });
   },
 
   async begin() {
@@ -93,11 +100,12 @@ export const useWorkout = create<State>()(
   async addExercise(ex, swap = false) {
     const { blocks, exIdx } = get();
     const cur = blocks[exIdx];
-    const block = await buildBlock(ex, swap && cur ? Math.max(1, cur.sets.filter((x) => x.type === 'working').length) : 3);
-    // Swap with logged sets keeps the old block so its sets stay visible.
+    const block: ExerciseBlock = await buildBlock(ex, swap && cur ? Math.max(1, cur.sets.filter((x) => x.type === 'working').length) : 3);
+    // A swap takes over the old block's routine row. With logged sets the old block stays so they remain visible.
+    if (swap && cur) block.reId = cur.reId;
     const replace = swap && cur && !cur.sets.some((x) => x.done);
     const idx = replace ? exIdx : exIdx + 1;
-    const next = [...blocks];
+    const next = swap && cur && !replace ? blocks.map((b, i) => (i === exIdx ? { ...b, replaced: true } : b)) : [...blocks];
     next.splice(idx, replace ? 1 : 0, block);
     set({ blocks: next, exIdx: idx, focus: { setIdx: 0, field: 'weight' } });
   },
@@ -212,7 +220,7 @@ export const useWorkout = create<State>()(
     const { sessionId, rest } = get();
     if (rest) void cancelRestDone();
     if (sessionId) await deleteSession(sessionId);
-    set({ sessionId: null, routine: null, blocks: [], rest: null });
+    set({ sessionId: null, routine: null, plan: null, blocks: [], rest: null });
   },
 
   async setNotes(exerciseId, notes) {
@@ -221,10 +229,16 @@ export const useWorkout = create<State>()(
   },
 
   async finish() {
-    const { sessionId, rest } = get();
+    const { sessionId, rest, routine, plan, blocks } = get();
     if (rest) void cancelRestDone();
     if (sessionId) await finishSession(sessionId);
-    set({ sessionId: null, routine: null, blocks: [], rest: null });
+    // Hand what changed against the routine to the summary screen, which offers to keep it.
+    if (sessionId && routine && plan) {
+      const lite = blocks.map((b) => ({ reId: b.reId, replaced: b.replaced, exerciseId: b.exercise.id, name: b.exercise.name, sets: b.sets }));
+      const changes = routineChanges(plan, lite);
+      if (changes.length) useUi.getState().setPendingChanges({ sessionId, routineId: routine.id, routineName: routine.name, changes, order: lite.filter((b) => !b.replaced) });
+    }
+    set({ sessionId: null, routine: null, plan: null, blocks: [], rest: null });
     return sessionId;
   },
 }),
@@ -232,7 +246,7 @@ export const useWorkout = create<State>()(
       name: 'workout',
       storage: createJSONStorage(() => ({ getItem: kv.get, setItem: kv.set, removeItem: kv.del })),
       onRehydrateStorage: () => (s) => { for (const b of s?.blocks ?? []) for (const x of b.sets) seq = Math.max(seq, x.id); },
-      partialize: (s) => ({ sessionId: s.sessionId, routine: s.routine, title: s.title, startedAt: s.startedAt, blocks: s.blocks, exIdx: s.exIdx, focus: s.focus, rest: s.rest }),
+      partialize: (s) => ({ sessionId: s.sessionId, routine: s.routine, plan: s.plan, title: s.title, startedAt: s.startedAt, blocks: s.blocks, exIdx: s.exIdx, focus: s.focus, rest: s.rest }),
     },
   ),
 );

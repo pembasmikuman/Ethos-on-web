@@ -13,6 +13,7 @@ import { Numpad } from '../components/Numpad';
 import { DOCK_HEIGHT } from '../components/Dock';
 import { sessionMeta } from './History';
 import { useUi } from '../store/ui';
+import { KeepChanges } from '../components/KeepChanges';
 
 type SetRow = Awaited<ReturnType<typeof sessionSets>>[number];
 type Field = 'weight' | 'reps' | 'rir';
@@ -141,6 +142,7 @@ export default function SessionDetail() {
           <Label>{date} · {mins} min · {session.sets} sets · {fmtKg(Math.round(session.volume_kg))} kg</Label>
           <Label color={t.dim}>Tap a number to edit · hold a set to delete</Label>
         </View>
+        {done && <KeepChanges sessionId={id} focused={focused} />}
         <View style={[st.card, { backgroundColor: t.card, borderColor: t.line }]}>
           <BodyMap load={weeklyVolume(sets)} height={150} />
         </View>
