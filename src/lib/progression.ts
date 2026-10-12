@@ -188,3 +188,31 @@ export function heatmap(sessions: { start_time: string; end_time: string | null 
   }
   return { cols, months };
 }
+
+/** What a set beat: a new heaviest weight, or more reps than ever at this weight or heavier. */
+export type PR = { kind: 'weight'; from: number; to: number } | { kind: 'reps'; from: number; to: number; at: number };
+
+/**
+ * Did `set` beat every earlier working set of the same exercise? `history` is those
+ * earlier sets only. No history means a first try, which is never a PR.
+ */
+export function findPR(set: { weight: number; reps: number }, history: { weight: number; reps: number }[]): PR | null {
+  if (!history.length) return null;
+  const heaviest = Math.max(...history.map((h) => h.weight));
+  if (set.weight > heaviest) return { kind: 'weight', from: heaviest, to: set.weight };
+  // Not heavier than ever, so at least one earlier set is at this weight or above.
+  const best = Math.max(...history.filter((h) => h.weight >= set.weight).map((h) => h.reps));
+  return set.reps > best ? { kind: 'reps', from: best, to: set.reps, at: set.weight } : null;
+}
+
+/** How many sets logged since `sinceIso` were a PR when they were logged. `sets` oldest first. */
+export function prCountSince(sets: { exercise_id: string; weight: number; reps: number; completed_at: string }[], sinceIso: string): number {
+  const seen: Record<string, { weight: number; reps: number }[]> = {};
+  let n = 0;
+  for (const s of sets) {
+    const before = (seen[s.exercise_id] ??= []);
+    if (s.completed_at >= sinceIso && findPR(s, before)) n++;
+    before.push(s);
+  }
+  return n;
+}

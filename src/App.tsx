@@ -4,6 +4,7 @@ import { ROUTES } from './routes';
 import { matchRoute, router, ScreenContext, TAB_ROOT, useNav, type Tab } from './lib/nav';
 import { useScheme, useTheme } from './lib/theme';
 import { Dock } from './components/Dock';
+import { PRCard } from './components/PRCard';
 import { useWorkout } from './store/workout';
 import { useWakeLock } from './lib/wakeLock';
 import { useRestAlarm } from './lib/restAlarm';
@@ -51,6 +52,7 @@ export function App() {
         }),
       )}
       <Dock />
+      <PRCard />
     </div>
   );
 }

@@ -31,3 +31,13 @@ test('a set is done and rest starts even when the push server never answers', as
   await useWorkout.getState().skipRest();
   expect(useWorkout.getState().rest).toBeNull();
 });
+
+test('a heavier working set than ever raises the PR card', async () => {
+  const { useWorkout } = await import('../store/workout');
+  const w = () => useWorkout.getState();
+  for (const [f, v] of [['weight', '65'], ['reps', '8']] as const) { w().setFocus(1, f); w().input(v); }
+  await w().completeSet();
+  for (let i = 0; i < 50 && !w().pr; i++) await new Promise((r) => setTimeout(r, 10)); // checkPR runs after completeSet returns
+  expect(w().pr).toMatchObject({ kind: 'weight', from: 60, to: 65, month: 1 });
+  await w().skipRest();
+});

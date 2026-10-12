@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { kv } from '../db/kv';
 import type { Exercise } from '../db';
-import { deleteSession, finishSession, insertSet, setSetNotes as saveSetNotes, recentExerciseSessions, routineExercises, startSession, type LoggedSet, type Routine, setExerciseNotes } from '../db/queries';
-import { nextWeight, stalled, warmupRamp } from '../lib/progression';
+import { deleteSession, finishSession, insertSet, prSets, setSetNotes as saveSetNotes, recentExerciseSessions, routineExercises, startSession, type LoggedSet, type Routine, setExerciseNotes } from '../db/queries';
+import { findPR, nextWeight, prCountSince, stalled, warmupRamp, type PR } from '../lib/progression';
 import { cancelRestDone, ensurePush, scheduleRestDone } from '../lib/rest';
 import { fmtKg } from '../lib/format';
 import { routineChanges, type PlanRow } from '../lib/routineChanges';
@@ -26,6 +26,8 @@ type State = {
   exIdx: number;
   focus: { setIdx: number; field: Field };
   rest: { endsAt: number; total: number } | null;
+  /** The PR the last set hit, for the card. `month`: PRs so far this month, this one included. Not persisted. */
+  pr: (PR & { exercise: string; month: number }) | null;
 
   /** Load routine into a preview. No DB session, no clock. */
   preview: (routine: Routine) => Promise<void>;
@@ -50,6 +52,7 @@ type State = {
   /** Rest ran out on its own. Clears the timer but leaves the scheduled alert alone,
    *  so the bell still rings instead of being cancelled a moment before it fires. */
   restDone: () => void;
+  dismissPR: () => void;
   finish: () => Promise<string | null>;
   setNotes: (exerciseId: string, notes: string) => Promise<void>;
   cancel: () => Promise<void>;
@@ -87,6 +90,7 @@ export const useWorkout = create<State>()(
   exIdx: 0,
   focus: { setIdx: 0, field: 'weight' },
   rest: null,
+  pr: null,
 
   async preview(routine) {
     const exs = await routineExercises(routine.id);
@@ -214,6 +218,7 @@ export const useWorkout = create<State>()(
     });
     // A new schedule replaces the device's pending alarm on the server, so no cancel first.
     void scheduleRestDone(endsAt);
+    if (s.type === 'working' && b.exercise.load !== 'time') void checkPR(b.exercise, logId);
   },
 
   async adjustRest(delta) {
@@ -228,6 +233,10 @@ export const useWorkout = create<State>()(
 
   restDone() {
     set({ rest: null });
+  },
+
+  dismissPR() {
+    set({ pr: null });
   },
 
   async skipRest() {
@@ -270,3 +279,15 @@ export const useWorkout = create<State>()(
     },
   ),
 );
+
+/** After a working set is saved: if it beat every earlier set of `ex`, raise the PR card. */
+async function checkPR(ex: Exercise, logId: string) {
+  const all = await prSets();
+  const self = all.find((x) => x.id === logId);
+  if (!self) return;
+  const pr = findPR(self, all.filter((x) => x.exercise_id === ex.id && x.id !== logId && x.completed_at <= self.completed_at));
+  if (!pr) return;
+  const now = new Date();
+  const month = prCountSince(all, new Date(now.getFullYear(), now.getMonth(), 1).toISOString());
+  useWorkout.setState({ pr: { ...pr, exercise: ex.name, month } });
+}

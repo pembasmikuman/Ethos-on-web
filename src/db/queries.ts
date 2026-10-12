@@ -119,6 +119,18 @@ export async function setsSince(sinceIso: string) {
   );
 }
 
+/** Every working set of a load-bearing exercise (not timed), oldest first, for PR checks. */
+export async function prSets() {
+  const db = await getDb();
+  // ponytail: reads the whole log on each set, fine for a personal log; narrow by exercise if it ever lags
+  return db.getAllAsync<{ id: string; exercise_id: string; weight: number; reps: number; completed_at: string }>(
+    `SELECT l.id, l.exercise_id, l.weight, l.reps, l.completed_at FROM logged_sets l
+     JOIN exercises e ON e.id = l.exercise_id
+     WHERE l.set_type = 'working' AND e.load <> 'time'
+     ORDER BY l.completed_at`,
+  );
+}
+
 /** Delete a session and its sets. */
 export async function deleteSession(sessionId: string): Promise<void> {
   const db = await getDb();
