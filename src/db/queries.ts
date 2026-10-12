@@ -14,6 +14,7 @@ export type LoggedSet = {
   weight: number;
   reps: number;
   rir: number | null;
+  notes?: string;
   completed_at: string;
 };
 
@@ -65,9 +66,9 @@ export async function insertSet(s: Omit<LoggedSet, 'id' | 'completed_at'>): Prom
   const db = await getDb();
   const id = crypto.randomUUID();
   await db.runAsync(
-    `INSERT INTO logged_sets (id, session_id, exercise_id, set_number, set_type, weight, reps, rir, completed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, s.session_id, s.exercise_id, s.set_number, s.set_type, s.weight, s.reps, s.rir, new Date().toISOString()],
+    `INSERT INTO logged_sets (id, session_id, exercise_id, set_number, set_type, weight, reps, rir, notes, completed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, s.session_id, s.exercise_id, s.set_number, s.set_type, s.weight, s.reps, s.rir, s.notes ?? '', new Date().toISOString()],
   );
   return id;
 }
@@ -162,6 +163,11 @@ export async function sessionSets(sessionId: string) {
 export async function updateSet(id: string, weight: number, reps: number, rir: number | null): Promise<void> {
   const db = await getDb();
   await db.runAsync('UPDATE logged_sets SET weight = ?, reps = ?, rir = ? WHERE id = ?', [weight, reps, rir, id]);
+}
+
+export async function setSetNotes(id: string, notes: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE logged_sets SET notes = ? WHERE id = ?', [notes, id]);
 }
 
 export async function deleteSet(id: string): Promise<void> {

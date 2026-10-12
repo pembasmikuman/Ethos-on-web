@@ -178,6 +178,7 @@ export default function SessionDetail() {
                     {cell(x, 'weight', fmtKg(x.weight), 'kg', warm ? t.mute : t.text)}
                     {cell(x, 'reps', String(x.reps), 'reps', warm ? t.mute : hit ? t.green : t.text)}
                     {!warm && cell(x, 'rir', x.rir == null ? '–' : String(x.rir), 'rir', t.mute)}
+                    {!!x.notes && <Label color={t.mute} numberOfLines={1} style={{ flex: 1, textAlign: 'right', textTransform: 'none' }}>{x.notes}</Label>}
                   </Pressable>
                 );
               })}

@@ -121,6 +121,8 @@ const MIGRATIONS: string[] = [
   CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   CREATE TABLE photo_files (name TEXT PRIMARY KEY, b64 TEXT NOT NULL);
   `,
+  // A short note per set, typed while logging ("failed on 7", "belt").
+  `ALTER TABLE logged_sets ADD COLUMN notes TEXT NOT NULL DEFAULT '';`,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

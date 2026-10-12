@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { kv } from '../db/kv';
 import type { Exercise } from '../db';
-import { deleteSession, finishSession, insertSet, recentExerciseSessions, routineExercises, startSession, type LoggedSet, type Routine, setExerciseNotes } from '../db/queries';
+import { deleteSession, finishSession, insertSet, setSetNotes as saveSetNotes, recentExerciseSessions, routineExercises, startSession, type LoggedSet, type Routine, setExerciseNotes } from '../db/queries';
 import { nextWeight, stalled, warmupRamp } from '../lib/progression';
 import { cancelRestDone, ensurePush, scheduleRestDone } from '../lib/rest';
 import { fmtKg } from '../lib/format';
@@ -10,7 +10,8 @@ import { routineChanges, type PlanRow } from '../lib/routineChanges';
 import { useUi } from './ui';
 
 export type Field = 'weight' | 'reps' | 'rir';
-export type SetDraft = { id: number; type: 'warmup' | 'working'; weight: string; reps: string; rir: string; done: boolean };
+/** `logId`: the logged_sets row once done, so a note typed afterwards still reaches it. `notes` may be missing on drafts saved before notes existed. */
+export type SetDraft = { id: number; type: 'warmup' | 'working'; weight: string; reps: string; rir: string; notes?: string; done: boolean; logId?: string };
 /** `reId`: the routine row this block stands in for, none when added this session. `replaced`: swapped out after sets were logged, kept only to show them. */
 export type ExerciseBlock = { exercise: Exercise; sets: SetDraft[]; prev: LoggedSet[]; overload: boolean; deload: boolean; why: string; stalled: boolean; reId?: string; replaced?: boolean };
 
@@ -41,6 +42,8 @@ type State = {
   input: (value: string) => void;
   addSet: (type?: 'warmup' | 'working') => void;
   removeSet: (setIdx: number) => void;
+  /** Note on one set (by draft id), in any exercise. Saved to the DB too if the set is already logged. */
+  setSetNote: (id: number, notes: string) => void;
   completeSet: () => Promise<void>;
   adjustRest: (deltaSeconds: number) => Promise<void>;
   skipRest: () => Promise<void>;
@@ -172,6 +175,13 @@ export const useWorkout = create<State>()(
     });
   },
 
+  setSetNote(id, notes) {
+    const blocks = get().blocks.map((b) => ({ ...b, sets: b.sets.map((x) => (x.id === id ? { ...x, notes } : x)) }));
+    set({ blocks });
+    const logId = blocks.flatMap((b) => b.sets).find((x) => x.id === id)?.logId;
+    if (logId) void saveSetNotes(logId, notes);
+  },
+
   async completeSet() {
     ensurePush(); // first, before any await: iOS only shows the permission prompt inside the tap
     const { blocks, exIdx, focus, sessionId } = get();
@@ -182,7 +192,7 @@ export const useWorkout = create<State>()(
     const reps = parseInt(s.reps, 10);
     if (Number.isNaN(weight) || Number.isNaN(reps)) return;
     const workingBefore = b.sets.slice(0, focus.setIdx).filter((x) => x.type === 'working').length;
-    await insertSet({
+    const logId = await insertSet({
       session_id: sessionId,
       exercise_id: b.exercise.id,
       set_number: s.type === 'warmup' ? 0 : workingBefore + 1,
@@ -190,13 +200,15 @@ export const useWorkout = create<State>()(
       weight,
       reps,
       rir: s.rir === '' ? null : parseInt(s.rir, 10),
+      notes: s.notes ?? '',
     });
-    const sets = b.sets.map((x, i) => (i === focus.setIdx ? { ...x, done: true } : x));
+    // Re-read: a note may have been typed while the insert was in flight.
+    const sets = get().blocks[exIdx].sets.map((x, i) => (i === focus.setIdx ? { ...x, done: true, logId } : x));
     const nextIdx = sets.findIndex((x, i) => i > focus.setIdx && !x.done);
     const total = b.exercise.default_rest_seconds;
     const endsAt = Date.now() + total * 1000;
     set({
-      blocks: blocks.map((x, i) => (i === exIdx ? { ...x, sets } : x)),
+      blocks: get().blocks.map((x, i) => (i === exIdx ? { ...x, sets } : x)),
       focus: { setIdx: nextIdx === -1 ? focus.setIdx : nextIdx, field: nextIdx === -1 ? focus.field : 'reps' },
       rest: { endsAt, total },
     });

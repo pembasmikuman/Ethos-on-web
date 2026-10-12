@@ -7,7 +7,7 @@ import { applyKey, fmtClock, fmtKg } from '../lib/format';
 import { useWorkout } from '../store/workout';
 import { Doto, Label } from '../components/Text';
 import { Numpad } from '../components/Numpad';
-import { SetRow } from '../components/SetRow';
+import { SetHeader, SetRow } from '../components/SetRow';
 import { DOCK_HEIGHT } from '../components/Dock';
 import type { ExerciseBlock, Field } from '../store/workout';
 import { Swipe } from '../components/Swipe';
@@ -46,7 +46,7 @@ type PageProps = { block: ExerciseBlock; focus: { setIdx: number; field: Field }
 
 const ExercisePage = memo(function ExercisePage({ block, focus, onEdit }: PageProps) {
   const t = useTheme();
-  const { addSet, removeSet, setFocus, setNotes } = useWorkout.getState();
+  const { addSet, removeSet, setFocus, setNotes, setSetNote } = useWorkout.getState();
   let working = 0;
   return (
     <View style={{ flex: 1, gap: 12 }}>
@@ -75,7 +75,9 @@ const ExercisePage = memo(function ExercisePage({ block, focus, onEdit }: PagePr
           <Label style={{ flex: 1 }}>Stalled 3 sessions · try −10%</Label>
         </View>
       )}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 4 }}>
+      <ScrollView style={{ flex: 1 }}>
+        <View style={[s.card, { backgroundColor: t.card, borderColor: t.line }]}>
+        <SetHeader load={block.exercise.load} />
         {block.sets.map((set, i) => {
           if (set.type === 'working') working += 1;
           const n = working;
@@ -92,10 +94,12 @@ const ExercisePage = memo(function ExercisePage({ block, focus, onEdit }: PagePr
               active={focus != null && i === focus.setIdx}
               focusField={focus != null && i === focus.setIdx ? focus.field : null}
               onFocus={(f) => { setFocus(i, f); onEdit(); }}
+              onNotes={(v) => setSetNote(set.id, v)}
             />
             </Swipe>
           );
         })}
+        </View>
         <View style={s.actions}>
           <Pressable onPress={() => addSet('warmup')} hitSlop={8}><Label color={t.warm}>+ Warmups</Label></Pressable>
           <Pressable onPress={() => addSet()} hitSlop={8}><Label>+ Set</Label></Pressable>
@@ -226,6 +230,7 @@ export default function Workout() {
 const s = StyleSheet.create({
   page: { flex: 1, paddingHorizontal: 16, gap: 12 },
   head: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 4, gap: 12 },
+  card: { padding: 12, borderRadius: 16, borderWidth: 1, gap: 4 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, minHeight: 44 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   actions: { flexDirection: 'row', gap: 24, paddingHorizontal: 12, paddingVertical: 10 },
