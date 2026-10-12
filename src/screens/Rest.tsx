@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from '../rn';
+import { Pressable, ScrollView, StyleSheet, View } from '../rn';
 import { router, useIsFocused } from '../lib/nav';
 import { useSafeAreaInsets } from '../lib/insets';
 import { useTheme, useTopInset } from '../lib/theme';
@@ -7,6 +7,7 @@ import { fmtClock, fmtKg } from '../lib/format';
 import { useWorkout } from '../store/workout';
 import { Doto, Label } from '../components/Text';
 import { DotRing } from '../components/DotRing';
+import { DOCK_HEIGHT } from '../components/Dock';
 
 export default function Rest() {
   const t = useTheme();
@@ -46,7 +47,7 @@ export default function Rest() {
   );
 
   return (
-    <View style={[s.page, { backgroundColor: t.bg, paddingTop: top + 24, paddingBottom: insets.bottom + 16 }]}>
+    <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={[s.page, { paddingTop: top + 24, paddingBottom: insets.bottom + DOCK_HEIGHT + 16 }]}>
       <View style={s.head}>
         <Label numberOfLines={1}>Rest · {block?.exercise.name}</Label>
         <Label>Set {focus.setIdx + 1} of {block?.sets.length}</Label>
@@ -76,16 +77,16 @@ export default function Rest() {
           {prev && <Label color={t.dim} size={10}>prev {fmtKg(prev.weight)} × {prev.reps}{prev.rir != null ? ` @ ${prev.rir}` : ''}</Label>}
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const s = StyleSheet.create({
-  page: { flex: 1, paddingHorizontal: 16, alignItems: 'center' },
+  page: { flexGrow: 1, paddingHorizontal: 16, alignItems: 'center' },
   head: { alignSelf: 'stretch', gap: 6, paddingHorizontal: 4 },
   ring: { marginTop: 48, width: 300, height: 300 },
   center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 6 },
-  controls: { flexDirection: 'row', gap: 10, alignSelf: 'stretch', marginTop: 40 },
+  controls: { flexDirection: 'row', gap: 10, alignSelf: 'stretch', marginTop: 40, marginBottom: 24 },
   btn: { height: 56, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   next: { marginTop: 'auto', alignSelf: 'stretch', padding: 16, borderRadius: 16, borderWidth: 1, gap: 10 },
   nums: { flexDirection: 'row', alignItems: 'baseline', gap: 14 },
