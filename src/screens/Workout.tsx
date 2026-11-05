@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View, type ScrollViewHandle } from '../rn';
-import { router } from '../lib/nav';
+import { router, useFocusEffect } from '../lib/nav';
 import { useSafeAreaInsets } from '../lib/insets';
 import { useTheme, useTopInset } from '../lib/theme';
 import { applyKey, fmtClock, fmtKg } from '../lib/format';
 import { useWorkout } from '../store/workout';
+import { useUi } from '../store/ui';
 import { Doto, Label } from '../components/Text';
 import { Numpad } from '../components/Numpad';
 import { SetHeader, SetRow } from '../components/SetRow';
@@ -129,6 +130,15 @@ export default function Workout() {
   const shown = useRef(exIdx);
   const openPad = useCallback(() => setPadOpen(true), []);
   const grab = useRef<number | null>(null);
+  const setDockHidden = useUi((st) => st.setDockHidden);
+  // The bar's Log button carries the clock (and hold to end); the FAB hides on Log, so then it stays up here.
+  const barClock = useUi((st) => st.nav) === 'dock';
+
+  // The keypad gets the bottom edge: the dock steps aside while it is open, and only while this screen is showing.
+  useFocusEffect(useCallback(() => {
+    setDockHidden(padOpen);
+    return () => setDockHidden(false);
+  }, [padOpen, setDockHidden]));
 
   // Realign the visible page after every commit: exIdx changed elsewhere (overview,
   // prev/next), or pageH changed because the keypad opened or closed. Has to run as an
@@ -162,6 +172,8 @@ export default function Workout() {
       return;
     }
     await w.completeSet();
+    // The set is in: put the keypad away until a box is tapped again.
+    setPadOpen(false);
 
     if (useWorkout.getState().rest) router.navigate('/rest');
   };
@@ -187,7 +199,7 @@ export default function Workout() {
             <Doto size={30} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{block.exercise.name.toUpperCase()}</Doto>
           </Pressable>
         </View>
-        <HeaderClock onFinish={onFinish} />
+        {!barClock && <HeaderClock onFinish={onFinish} />}
       </View>
 
       <ScrollView
@@ -218,7 +230,7 @@ export default function Workout() {
       </View>
 
       {/* The deck: everything you press between sets, raised off the page and running under the dock. */}
-      <View style={[s.deck, { backgroundColor: t.card, borderColor: t.line, marginBottom: -(insets.bottom + DOCK_HEIGHT), paddingBottom: insets.bottom + DOCK_HEIGHT + 10 }]}>
+      <View style={[s.deck, { backgroundColor: t.card, borderColor: t.line, marginBottom: -(insets.bottom + DOCK_HEIGHT), paddingBottom: insets.bottom + (padOpen ? 10 : DOCK_HEIGHT + 10) }]}>
         <div
           onPointerDown={(e) => { grab.current = e.clientY; }}
           // Tap the grip to toggle, or drag it: down hides, up shows. The Hide/Keypad label does the same for keyboards.

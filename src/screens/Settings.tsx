@@ -7,7 +7,7 @@ import { backupFile, backupSummary, pickBackup, restoreBackup, shareFile } from 
 import { alertStatus } from '../lib/rest';
 import { Doto, Label } from '../components/Text';
 import { DOCK_HEIGHT } from '../components/Dock';
-import { useUi, type Appearance } from '../store/ui';
+import { useUi, type Appearance, type Nav } from '../store/ui';
 
 const ALERTS = {
   on: 'On. A banner shows when rest ends in another app.',
@@ -24,6 +24,8 @@ export default function Settings() {
   const [note, setNote] = useState<string | null>(null);
   const appearance = useUi((s) => s.appearance);
   const setAppearance = useUi((s) => s.setAppearance);
+  const nav = useUi((s) => s.nav);
+  const setNav = useUi((s) => s.setNav);
   // Built ahead so the Export tap can open the share sheet before any await (Safari needs that).
   const [file, setFile] = useState<File | null>(null);
   // Rebuilt each time Settings comes into view, so Export never shares a backup from before your latest workout.
@@ -83,6 +85,18 @@ export default function Settings() {
           );
         })}
       </View>
+      <Label style={s.section}>Navigation</Label>
+      <View style={[s.seg, { backgroundColor: t.card, borderColor: t.line }]}>
+        {(['dock', 'fab'] as Nav[]).map((n) => {
+          const on = n === nav;
+          return (
+            <Pressable key={n} onPress={() => setNav(n)} style={[s.segItem, { backgroundColor: on ? t.bg : 'transparent', borderColor: on ? t.line : 'transparent' }]}>
+              <Label color={on ? t.accent : t.mute}>{n}</Label>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Label color={t.dim} style={{ paddingHorizontal: 4, paddingTop: 6 }}>{nav === 'dock' ? 'A bar along the bottom, with your workout raised in the middle.' : 'A button you can park on any edge. Hold and slide to switch tabs.'}</Label>
       <Label style={s.section}>Training</Label>
       {row('SETUP', 'Rule, rep range, rest and weight jump for every exercise', () => router.push('/setup'))}
       <Label style={s.section}>Backup</Label>

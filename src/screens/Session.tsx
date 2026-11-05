@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from '../lib/insets';
 import { useTheme, useTopInset } from '../lib/theme';
 import { fmtClock } from '../lib/format';
 import { useWorkout } from '../store/workout';
+import { useUi } from '../store/ui';
 import { Doto, Label } from '../components/Text';
 import { DOCK_HEIGHT } from '../components/Dock';
 import { DragRow, ROW_H, useDragList } from '../components/DragRow';
@@ -26,6 +27,8 @@ export default function Session() {
   const drag = useDragList();
   const [now] = useState(Date.now());
   const [ending, setEnding] = useState(false);
+  // In Dock mode the bar's Log button holds to end the workout, so the ring here would say it twice.
+  const barClock = useUi((st) => st.nav) === 'dock';
 
   if (blocks.length === 0 && sessionId === null) return <View style={{ flex: 1, backgroundColor: t.bg }} />;
 
@@ -44,6 +47,7 @@ export default function Session() {
   const close = () => { w.cancel(); router.dismissTo('/'); };
   const done = blocks.reduce((n, b) => n + b.sets.filter((x) => x.done).length, 0);
   const total = blocks.reduce((n, b) => n + b.sets.length, 0);
+  const exLeft = blocks.filter((b) => b.sets.some((x) => !x.done)).length;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -60,7 +64,14 @@ export default function Session() {
           </View>
           <Doto size={36} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{title.toUpperCase().replace(/ · /g, '\u2009·\u2009')}</Doto>
         </View>
-        {started && (
+        {started && barClock && (
+          <View style={{ alignItems: 'flex-end', gap: 2 }}>
+            <Label color={t.accent} size={10}>Sets</Label>
+            <Doto size={24} color={t.mute}>{done}/{total}</Doto>
+            <Label color={t.dim} size={10}>{exLeft === 0 ? 'All done' : `${exLeft} exercise${exLeft === 1 ? '' : 's'} left`}</Label>
+          </View>
+        )}
+        {started && !barClock && (
           <HoldRing size={84} idle={total ? done / total : 0} idleColor={t.mute} onHold={() => setEnding(true)} label="Hold to finish">
             <Label color={t.accent} size={10}>Finish</Label>
             <Doto size={18} color={t.mute}>{done}/{total}</Doto>

@@ -114,7 +114,8 @@ export const router = {
   /** The workout ended somewhere other than its own screens (e.g. a restore): drop its tab. */
   clearLog() {
     if (!nav.stacks.log.length) return;
-    commit({ tab: nav.tab === 'log' ? 'home' : nav.tab, stacks: { ...nav.stacks, log: [] } });
+    // After a reload on a workout screen, Home has no stack yet; give it its first screen to land on.
+    commit({ tab: nav.tab === 'log' ? 'home' : nav.tab, stacks: { ...nav.stacks, log: [], home: nav.stacks.home.length ? nav.stacks.home : seed('home') } });
   },
 };
 

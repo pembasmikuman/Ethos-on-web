@@ -6,6 +6,7 @@ import type { Change } from '../lib/routineChanges';
 export type PendingChanges = { sessionId: string; routineId: string; routineName: string; changes: Change[]; order: { reId?: string; exerciseId: string }[] };
 
 export type Appearance = 'system' | 'dark' | 'light';
+export type Nav = 'dock' | 'fab';
 export type Panel = 'volume' | 'days' | 'map';
 const PANELS: Panel[] = ['volume', 'days', 'map'];
 
@@ -14,6 +15,9 @@ type Ui = {
   setDockHidden: (v: boolean) => void;
   appearance: Appearance;
   setAppearance: (a: Appearance) => void;
+  /** Bottom bar or floating button for switching tabs. */
+  nav: Nav;
+  setNav: (n: Nav) => void;
   /** Muscle keys shown on the Home volume panel. */
   volumeMuscles: string[];
   toggleVolumeMuscle: (key: string) => void;
@@ -50,6 +54,8 @@ export const useUi = create<Ui>((set) => ({
     kv.set(KEY, appearance);
     set({ appearance });
   },
+  nav: kv.get('navStyle') === 'fab' ? 'fab' : 'dock',
+  setNav: (nav) => { kv.set('navStyle', nav); set({ nav }); },
   panelOrder: initialPanels,
   movePanel: (key, dir) =>
     set((st) => {
