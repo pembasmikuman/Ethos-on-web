@@ -60,7 +60,8 @@ dialog.alert.end { width: min(340px, 90vw); }
 dialog.alert.end .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 dialog.alert.end .grid button { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 0 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); font-size: 11px; touch-action: none; }
 dialog.alert.end .grid button[data-style='accent'] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
-dialog.alert.end .ring { position: relative; display: flex; }
+dialog.alert.end .grid button { position: relative; overflow: hidden; }
+dialog.alert.end .fill { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 0 14px; background: var(--accent); color: var(--bg); }
 dialog.alert.end p.foot { margin: 14px 0 0; text-align: center; font-size: 11px; color: var(--dim); }
 
 /* Finish celebration: wipe and lift run from JS (they need the tap point); dots and text are plain keyframes. */

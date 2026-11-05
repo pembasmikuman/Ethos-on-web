@@ -40,8 +40,8 @@ export default function Session() {
     ]);
   };
   const add = () => { w.setExercise(blocks.length - 1); router.push('/routines/pick?session=add'); };
-  // Holding Discard before the session starts is the confirm, so no menu.
-  const finish = () => started ? setEnding(true) : (w.cancel(), router.dismissTo('/'));
+  // Before Start nothing is saved, so closing the preview is a plain tap; the hold only guards logged sets.
+  const close = () => { w.cancel(); router.dismissTo('/'); };
   const done = blocks.reduce((n, b) => n + b.sets.filter((x) => x.done).length, 0);
   const total = blocks.reduce((n, b) => n + b.sets.length, 0);
 
@@ -50,13 +50,22 @@ export default function Session() {
     <ScrollView scrollEnabled={!dragging} contentContainerStyle={[s.page, { paddingTop: top + 12, paddingBottom: insets.bottom + DOCK_HEIGHT + (started ? 12 : 104) }]}>
       <View style={s.head}>
         <View style={{ flex: 1, gap: 4 }}>
-          <Label color={started ? t.mute : t.accent}>{started ? `${fmtClock((now - startedAt) / 1000)} elapsed` : 'Preview · not started'}</Label>
-          <Doto size={36} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{title.toUpperCase()}</Doto>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Label color={started ? t.mute : t.accent}>{started ? `${fmtClock((now - startedAt) / 1000)} elapsed` : 'Preview · not started'}</Label>
+            {!started && (
+              <Pressable onPress={close} hitSlop={14}>
+                <svg role="img" aria-label="Close preview" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={t.accent} strokeWidth={2.2} strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </Pressable>
+            )}
+          </View>
+          <Doto size={36} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{title.toUpperCase().replace(/ · /g, '\u2009·\u2009')}</Doto>
         </View>
-        <HoldRing size={84} idle={total ? done / total : 0} idleColor={t.mute} onHold={finish} label={started ? 'Hold to finish' : 'Hold to discard'}>
-          <Label color={t.accent} size={10}>{started ? 'Finish' : 'Discard'}</Label>
-          <Doto size={18} color={t.mute}>{done}/{total}</Doto>
-        </HoldRing>
+        {started && (
+          <HoldRing size={84} idle={total ? done / total : 0} idleColor={t.mute} onHold={() => setEnding(true)} label="Hold to finish">
+            <Label color={t.accent} size={10}>Finish</Label>
+            <Doto size={18} color={t.mute}>{done}/{total}</Doto>
+          </HoldRing>
+        )}
       </View>
 
       {blocks.map((b, i) => {

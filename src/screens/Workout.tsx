@@ -179,7 +179,7 @@ export default function Workout() {
         <View style={{ gap: 4, flex: 1 }}>
           <Pressable onPress={() => router.navigate('/session')} hitSlop={8}><Label color={t.accent}>‹ {title} · {exIdx + 1} / {blocks.length}</Label></Pressable>
           <Pressable onPress={() => setTrends(true)} hitSlop={8}>
-            <Doto size={30} numberOfLines={2}>{block.exercise.name.toUpperCase()}</Doto>
+            <Doto size={30} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{block.exercise.name.toUpperCase()}</Doto>
           </Pressable>
         </View>
         <HeaderClock onFinish={onFinish} />

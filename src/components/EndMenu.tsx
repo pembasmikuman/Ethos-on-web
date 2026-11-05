@@ -4,7 +4,6 @@ import { shut } from '../lib/alert';
 import { router } from '../lib/nav';
 import { useTheme } from '../lib/theme';
 import { useWorkout } from '../store/workout';
-import { DotRing } from './DotRing';
 import { useHold } from './HoldRing';
 
 const ICONS = {
@@ -45,11 +44,13 @@ export function EndMenu({ open, onClose, done, total }: { open: boolean; onClose
         <button type="button" onClick={onClose}><Icon d={ICONS.play} color={t.text} />Keep going</button>
         <button type="button" data-style="accent" onClick={finish}><Icon d={ICONS.flag} color={t.bg} />Finish</button>
         <button type="button" data-style="destructive" {...hold.props}>
-          <span className="ring">
-            {hold.progress > 0 && <span style={{ position: 'absolute', inset: -11 }}><DotRing size={48} count={20} fraction={hold.progress} on={t.accent} off="transparent" /></span>}
-            <Icon d={ICONS.trash} color={t.accent} />
-          </span>
+          <Icon d={ICONS.trash} color={t.accent} />
           Discard
+          {/* Same tile in accent, uncovered left to right while held; snaps back on release. */}
+          <span className="fill" aria-hidden style={{ clipPath: `inset(0 ${100 - hold.progress * 100}% 0 0)`, transition: hold.progress > 0 ? 'none' : 'clip-path 200ms ease-out' }}>
+            <Icon d={ICONS.trash} color={t.bg} />
+            Discard
+          </span>
         </button>
       </div>
       <p className="foot">Hold Discard to confirm (500 ms)</p>

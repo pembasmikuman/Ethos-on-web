@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import { navState, router, type Move } from './nav';
+import { useWorkout } from '../store/workout';
 
 // iPhone stack motion: a new screen slides in from the right while the one under it drifts a third as far
 // to the left; going back is the reverse, by tap or by dragging from the left edge.
@@ -49,14 +50,17 @@ export function useEdgeSwipe(box: RefObject<HTMLElement | null>): void {
   useEffect(() => {
     const b = box.current;
     if (!b) return;
-    let g: { x0: number; y0: number; lock: boolean; dx: number; v: number; t: number; w: number; top: HTMLElement; under: HTMLElement } | null = null;
+    let g: { x0: number; y0: number; lock: boolean; dx: number; v: number; t: number; w: number; top: HTMLElement; under: HTMLElement; preview: boolean } | null = null;
     const underAt = (dx: number, w: number) => `translateX(${UNDER * (w - dx)}px)`;
 
     const start = (e: TouchEvent) => {
       const n = navState(), st = n.stacks[n.tab], p = e.touches[0];
-      if (e.touches.length !== 1 || p.clientX > EDGE || st.length < 2 || n.move) return;
-      const top = screen(box, st.at(-1)!.k), under = screen(box, st.at(-2)!.k);
-      if (top && under) g = { x0: p.clientX, y0: p.clientY, lock: false, dx: 0, v: 0, t: e.timeStamp, w: b.clientWidth, top, under };
+      if (e.touches.length !== 1 || p.clientX > EDGE || n.move) return;
+      // A workout preview (nothing logged yet) is Log's only screen; swiping it away closes it onto Home.
+      const preview = n.tab === 'log' && st.length === 1 && useWorkout.getState().sessionId === null;
+      const below = preview ? n.stacks.home.at(-1) : st.at(-2);
+      const top = screen(box, st.at(-1)!.k), under = below && screen(box, below.k);
+      if (top && under) g = { x0: p.clientX, y0: p.clientY, lock: false, dx: 0, v: 0, t: e.timeStamp, w: b.clientWidth, top, under, preview };
     };
     const move = (e: TouchEvent) => {
       if (!g) return;
@@ -87,7 +91,7 @@ export function useEdgeSwipe(box: RefObject<HTMLElement | null>): void {
       const u = s.under.animate([{ transform: underAt(s.dx, s.w) }, { transform: back ? tx(0) : tx(UNDER) }], o);
       s.top.style.transform = s.under.style.transform = '';
       a.onfinish = () => {
-        if (back) { swiped = true; router.back(); } // the swiped screen leaves still parked off to the right
+        if (back) { swiped = true; if (s.preview) { useWorkout.getState().cancel(); router.dismissTo('/'); } else router.back(); } // the swiped screen leaves still parked off to the right
         else { s.under.style.visibility = 'hidden'; a.cancel(); }
         u.cancel();
       };

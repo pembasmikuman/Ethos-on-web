@@ -51,7 +51,9 @@ export const fonts = {
   monoBold: 'Mono600',
 };
 
-/** Top inset, from env(safe-area-inset-top). */
+/** Top inset, from env(safe-area-inset-top), plus room for the blur iOS 26+ lays under the status bar.
+ *  Only on devices that have a top inset; browsers and desktops get 0 as before. */
 export function useTopInset(): number {
-  return useSafeAreaInsets().top;
+  const top = useSafeAreaInsets().top;
+  return top > 0 ? top + 14 : 0;
 }
