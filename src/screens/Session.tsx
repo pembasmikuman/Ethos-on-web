@@ -8,6 +8,8 @@ import { useWorkout } from '../store/workout';
 import { Doto, Label } from '../components/Text';
 import { DOCK_HEIGHT } from '../components/Dock';
 import { DragRow, ROW_H, useDragList } from '../components/DragRow';
+import { HoldRing } from '../components/HoldRing';
+import { EndMenu } from '../components/EndMenu';
 
 /** Session overview: exercise order, progress, add/swap/remove. Tap a row to log it. */
 export default function Session() {
@@ -23,6 +25,7 @@ export default function Session() {
   const [dragging, setDragging] = useState(false);
   const drag = useDragList();
   const [now] = useState(Date.now());
+  const [ending, setEnding] = useState(false);
 
   if (blocks.length === 0 && sessionId === null) return <View style={{ flex: 1, backgroundColor: t.bg }} />;
 
@@ -37,11 +40,8 @@ export default function Session() {
     ]);
   };
   const add = () => { w.setExercise(blocks.length - 1); router.push('/routines/pick?session=add'); };
-  const finish = () => started ? Alert.alert('End session?', `${done} of ${total} sets logged.`, [
-      { text: 'Keep going', style: 'cancel' },
-      { text: 'Cancel session', style: 'destructive', onPress: async () => { await w.cancel(); router.dismissTo('/'); } },
-      { text: 'Finish', onPress: async () => { const id = await w.finish(); if (id) router.dismissTo('/', `/history/${id}?done=1`); else router.dismissTo('/'); } },
-    ]) : (w.cancel(), router.dismissTo('/'));
+  // Holding Discard before the session starts is the confirm, so no menu.
+  const finish = () => started ? setEnding(true) : (w.cancel(), router.dismissTo('/'));
   const done = blocks.reduce((n, b) => n + b.sets.filter((x) => x.done).length, 0);
   const total = blocks.reduce((n, b) => n + b.sets.length, 0);
 
@@ -53,10 +53,10 @@ export default function Session() {
           <Label color={started ? t.mute : t.accent}>{started ? `${fmtClock((now - startedAt) / 1000)} elapsed` : 'Preview · not started'}</Label>
           <Doto size={36} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{title.toUpperCase()}</Doto>
         </View>
-        <Pressable onPress={finish} hitSlop={10} style={{ alignItems: 'flex-end', gap: 4 }}>
-          <Label color={t.accent}>{started ? 'Finish' : 'Discard'}</Label>
-          <Doto size={22} color={t.mute}>{done}/{total}</Doto>
-        </Pressable>
+        <HoldRing size={84} idle={total ? done / total : 0} idleColor={t.mute} onHold={finish} label={started ? 'Hold to finish' : 'Hold to discard'}>
+          <Label color={t.accent} size={10}>{started ? 'Finish' : 'Discard'}</Label>
+          <Doto size={18} color={t.mute}>{done}/{total}</Doto>
+        </HoldRing>
       </View>
 
       {blocks.map((b, i) => {
@@ -83,6 +83,7 @@ export default function Session() {
         <Label color={t.accent}>+ Add exercise</Label>
       </Pressable>
     </ScrollView>
+    <EndMenu open={ending} onClose={() => setEnding(false)} done={done} total={total} />
     {!started && <View pointerEvents="none" style={[s.backing, { backgroundColor: t.bg, height: insets.bottom + DOCK_HEIGHT + 8 + 68 + 14 }]} />}
     {!started && (
       <Pressable

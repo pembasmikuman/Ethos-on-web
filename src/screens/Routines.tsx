@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from '../rn';
 import { router, useFocusEffect } from '../lib/nav';
 import { useSafeAreaInsets } from '../lib/insets';
-import { createRoutine, deletePlan, deleteRoutine, listRoutines, renamePlan, reorderPlan, type Routine } from '../db/queries';
+import { createRoutine, dayName, deletePlan, deleteRoutine, listRoutines, renamePlan, reorderPlan, type Routine } from '../db/queries';
 import { useTheme, useTopInset } from '../lib/theme';
 import { Doto, Label } from '../components/Text';
 import { DOCK_HEIGHT } from '../components/Dock';
@@ -49,7 +49,7 @@ export default function Routines() {
     ]);
 
   const dayMenu = (r: Routine) =>
-    Alert.alert('Delete day?', `${r.name}. Past sessions stay in history.`, [
+    Alert.alert('Delete day?', `${dayName(r)}. Past sessions stay in history.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => { await deleteRoutine(r.id); load(); } },
     ]);
@@ -70,7 +70,7 @@ export default function Routines() {
           {rows.filter((r) => r.plan === plan).map((r, i, days) => (
             <DragRow key={r.id} index={i} count={days.length} drag={drag} onGrab={() => { setDragging(true); }} onDrop={(f, to) => drop(plan, f, to)}>
               <Pressable onPress={() => router.push(`/routines/${r.id}`)} onLongPress={() => dayMenu(r)} style={({ pressed }) => [s.row, { borderTopColor: t.line, backgroundColor: t.card, opacity: pressed ? 0.7 : 1 }]}>
-                <Doto size={18} style={{ flex: 1 }}>{r.name.toUpperCase()}</Doto>
+                <Doto size={18} style={{ flex: 1 }}>{dayName(r).toUpperCase()}</Doto>
                 <Label>{r.exercises} ex</Label>
                 <View style={{ width: 36 }} />
               </Pressable>

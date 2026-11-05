@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from '../rn';
 import { router, useIsFocused } from '../lib/nav';
 import { useSafeAreaInsets } from '../lib/insets';
 import { useTheme, useTopInset } from '../lib/theme';
-import { fmtClock, fmtKg } from '../lib/format';
+import { fmtClock, fmtKg, kgToLb } from '../lib/format';
 import { useWorkout } from '../store/workout';
 import { Doto, Label } from '../components/Text';
 import { DotRing } from '../components/DotRing';
@@ -71,10 +71,10 @@ export default function Rest() {
         <View style={[s.next, { backgroundColor: t.card, borderColor: t.line }]}>
           <Label>Up next · Set {focus.setIdx + 1}</Label>
           <View style={s.nums}>
-            <Doto size={34}>{next.weight || '–'}</Doto><Label color={t.dim}>kg</Label>
+            <Doto size={34}>{next.weight || '–'}</Doto><Label color={t.dim}>{block.unit ?? 'kg'}</Label>
             <Doto size={34}>{block.exercise.target_rep_max}</Doto><Label color={t.dim}>target</Label>
           </View>
-          {prev && <Label color={t.dim} size={10}>prev {fmtKg(prev.weight)} × {prev.reps}{prev.rir != null ? ` @ ${prev.rir}` : ''}</Label>}
+          {prev && <Label color={t.dim} size={10}>prev {block.unit === 'lb' ? kgToLb(String(prev.weight)) : fmtKg(prev.weight)} × {prev.reps}{prev.rir != null ? ` @ ${prev.rir}` : ''}</Label>}
         </View>
       )}
     </ScrollView>

@@ -11,6 +11,9 @@ import { SetHeader, SetRow } from '../components/SetRow';
 import { DOCK_HEIGHT } from '../components/Dock';
 import type { ExerciseBlock, Field } from '../store/workout';
 import { Swipe } from '../components/Swipe';
+import { HoldRing } from '../components/HoldRing';
+import { EndMenu } from '../components/EndMenu';
+import { TrendSheet } from '../components/TrendSheet';
 
 /** One clock for the whole screen: rest countdown while resting, session elapsed otherwise.
  *  Lives up here so the tick never re-renders the exercise pages. */
@@ -27,18 +30,13 @@ function HeaderClock({ onFinish }: { onFinish: () => void }) {
 
   const left = rest ? Math.round((rest.endsAt - now) / 1000) : 0;
   const resting = rest != null && left > 0;
+  // Ring counts down the rest, or sweeps each minute of the session.
+  const idle = resting ? left / rest.total : (((now - startedAt) / 1000) % 60) / 60;
   return (
-    <Pressable
-      onPress={() => (resting ? router.navigate('/rest') : onFinish())}
-      hitSlop={10}
-      style={{ alignItems: 'flex-end', gap: 4 }}
-    >
-      <View style={s.clockLabel}>
-        {resting && <View style={[s.dot, { backgroundColor: t.accent }]} />}
-        <Label color={resting ? t.accent : t.mute}>{resting ? 'Resting' : 'Elapsed'}</Label>
-      </View>
-      <Doto size={22} color={resting ? t.accent : t.mute}>{fmtClock(resting ? left : (now - startedAt) / 1000)}</Doto>
-    </Pressable>
+    <HoldRing size={84} idle={idle} idleColor={resting ? t.accent : t.mute} onHold={onFinish} onPress={resting ? () => router.navigate('/rest') : undefined} label="Hold to end workout">
+      <Label color={resting ? t.accent : t.mute} size={10}>{resting ? 'Resting' : 'Elapsed'}</Label>
+      <Doto size={18} color={resting ? t.accent : t.mute}>{fmtClock(resting ? left : (now - startedAt) / 1000)}</Doto>
+    </HoldRing>
   );
 }
 
@@ -46,7 +44,7 @@ type PageProps = { block: ExerciseBlock; focus: { setIdx: number; field: Field }
 
 const ExercisePage = memo(function ExercisePage({ block, focus, onEdit }: PageProps) {
   const t = useTheme();
-  const { addSet, removeSet, setFocus, setNotes, setSetNote } = useWorkout.getState();
+  const { addSet, removeSet, setFocus, setNotes, setSetNote, toggleUnit } = useWorkout.getState();
   let working = 0;
   return (
     <View style={{ flex: 1, gap: 12 }}>
@@ -77,7 +75,7 @@ const ExercisePage = memo(function ExercisePage({ block, focus, onEdit }: PagePr
       )}
       <ScrollView style={{ flex: 1 }}>
         <View style={[s.card, { backgroundColor: t.card, borderColor: t.line }]}>
-        <SetHeader load={block.exercise.load} />
+        <SetHeader load={block.exercise.load} unit={block.unit} onUnit={toggleUnit} />
         {block.sets.map((set, i) => {
           if (set.type === 'working') working += 1;
           const n = working;
@@ -90,6 +88,7 @@ const ExercisePage = memo(function ExercisePage({ block, focus, onEdit }: PagePr
               prev={set.type === 'working' ? block.prev[n - 1] : undefined}
               targetMax={block.exercise.target_rep_max}
               load={block.exercise.load}
+              unit={block.unit}
               perSide={block.exercise.per_side === 1}
               active={focus != null && i === focus.setIdx}
               focusField={focus != null && i === focus.setIdx ? focus.field : null}
@@ -120,6 +119,8 @@ export default function Workout() {
   const block = blocks[exIdx];
   const [pageH, setPageH] = useState(0);
   const [padOpen, setPadOpen] = useState(true);
+  const [ending, setEnding] = useState(false);
+  const [trends, setTrends] = useState(false);
   const pager = useRef<ScrollViewHandle>(null);
   const shown = useRef(exIdx);
   const openPad = useCallback(() => setPadOpen(true), []);
@@ -160,18 +161,16 @@ export default function Workout() {
     if (useWorkout.getState().rest) router.navigate('/rest');
   };
   const doneLabel = nextField() ? `Next · ${nextField()}` : 'Done · Rest';
-  const onFinish = () =>
-    Alert.alert('End workout?', 'Finish saves it. Cancel deletes every set logged this session.', [
-      { text: 'Keep going', style: 'cancel' },
-      { text: 'Cancel session', style: 'destructive', onPress: async () => { await useWorkout.getState().cancel(); router.dismissTo('/'); } },
-      { text: 'Finish', onPress: async () => { const id = await useWorkout.getState().finish(); if (id) router.dismissTo('/', `/history/${id}?done=1`); else router.dismissTo('/'); } },
-    ]);
+  const onFinish = () => setEnding(true);
+  const doneSets = blocks.reduce((n, b) => n + b.sets.filter((x) => x.done).length, 0);
+  const totalSets = blocks.reduce((n, b) => n + b.sets.length, 0);
 
-  const onExerciseMenu = () =>
-    Alert.alert(block.exercise.name, undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Add exercise after', onPress: () => router.push('/routines/pick?session=add') },
-      { text: 'Swap this exercise', onPress: () => router.push('/routines/pick?session=swap') },
+  const rest = (secs: number) => () => { useWorkout.getState().startRest(secs); router.navigate('/rest'); };
+  const planned = block.exercise.default_rest_seconds;
+  const onRest = () =>
+    Alert.alert('Start a rest timer', undefined, [
+      ...[...new Set([60, 120, 180, 300, planned])].sort((a, b) => a - b).map((secs) => ({ text: secs === planned ? `${fmtClock(secs)} · this exercise` : fmtClock(secs), onPress: rest(secs) })),
+      { text: 'Cancel', style: 'cancel' as const },
     ]);
 
   return (
@@ -179,8 +178,8 @@ export default function Workout() {
       <View style={s.head}>
         <View style={{ gap: 4, flex: 1 }}>
           <Pressable onPress={() => router.navigate('/session')} hitSlop={8}><Label color={t.accent}>‹ {title} · {exIdx + 1} / {blocks.length}</Label></Pressable>
-          <Pressable onPress={onExerciseMenu} hitSlop={8}>
-            <Doto size={30} numberOfLines={1}>{block.exercise.name.toUpperCase()}</Doto>
+          <Pressable onPress={() => setTrends(true)} hitSlop={8}>
+            <Doto size={30} numberOfLines={2}>{block.exercise.name.toUpperCase()}</Doto>
           </Pressable>
         </View>
         <HeaderClock onFinish={onFinish} />
@@ -217,12 +216,17 @@ export default function Workout() {
         <Label color={t.dim} numberOfLines={1} style={{ flex: 1 }}>
           {blocks[exIdx + 1] ? `↓ Next · ${blocks[exIdx + 1].exercise.name}` : 'Last exercise'}
         </Label>
+        <Pressable onPress={onRest} hitSlop={10} style={[s.chip, { borderColor: t.accent }]}>
+          <Label color={t.accent}>◷ Rest</Label>
+        </Pressable>
         <Pressable onPress={() => setPadOpen(!padOpen)} hitSlop={10}>
           <Label color={t.accent}>{padOpen ? 'Hide keypad ⌄' : 'Keypad ⌃'}</Label>
         </Pressable>
       </View>
 
-      {padOpen && <Numpad onKey={onKey} onDone={onDone} doneLabel={doneLabel} />}
+      {padOpen && <Numpad onKey={onKey} onDone={onDone} doneLabel={doneLabel} lbKey={block.unit !== 'lb'} />}
+      {trends && <TrendSheet block={block} onClose={() => setTrends(false)} onSwap={() => router.push('/routines/pick?session=swap')} onAdd={() => router.push('/routines/pick?session=add')} />}
+      <EndMenu open={ending} onClose={() => setEnding(false)} done={doneSets} total={totalSets} />
     </View>
   );
 }
@@ -235,6 +239,7 @@ const s = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   actions: { flexDirection: 'row', gap: 24, paddingHorizontal: 12, paddingVertical: 10 },
   nav: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4 },
+  chip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   clockLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dots: { position: 'absolute', right: 16, top: '38%', gap: 6, alignItems: 'center' },
 });

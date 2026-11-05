@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from '../rn';
 import { fonts, useTheme } from '../lib/theme';
-import { fmtKg } from '../lib/format';
+import { fmtKg, kgToLb } from '../lib/format';
 import type { Field, SetDraft } from '../store/workout';
 import type { LoggedSet } from '../db/queries';
 import type { Load } from '../db';
@@ -14,6 +14,7 @@ type Props = {
   prev?: LoggedSet;
   targetMax: number;
   load?: Load;
+  unit?: 'lb';
   perSide?: boolean;
   active: boolean;
   focusField: Field | null;
@@ -25,23 +26,27 @@ type Props = {
 /** Column widths, shared by the header so the labels sit over their boxes. */
 export const COLS = { num: 30, weight: 1.25, reps: 1, rir: 0.9, gap: 6 };
 
-/** Kg · Reps · RIR, the header over a list of SetRows. */
-export function SetHeader({ load = 'weight' }: { load?: Load }) {
+/** Kg · Reps · RIR, the header over a list of SetRows. Tapping the weight label calls `onUnit` (kg ⇄ lb). */
+export function SetHeader({ load = 'weight', unit, onUnit }: { load?: Load; unit?: 'lb'; onUnit?: () => void }) {
   const col = (label: string, flex: number) => <Label size={10} style={{ flex, flexBasis: 0, textAlign: 'center' }}>{label}</Label>;
+  const u = unit ?? 'kg';
   return (
     <View style={[s.line, { paddingBottom: 2 }]}>
       <View style={{ width: COLS.num }} />
-      {col(load === 'bodyweight' ? '+kg' : 'kg', COLS.weight)}
+      {/* Padding pulled back by margin: a bigger tap target without moving the header. */}
+      <Pressable onPress={onUnit} style={{ flex: COLS.weight, flexBasis: 0, paddingVertical: 10, marginVertical: -10 }}>
+        {col(load === 'bodyweight' ? `+${u}` : u, 1)}
+      </Pressable>
       {col(load === 'time' ? 'Sec' : 'Reps', COLS.reps)}
       {col('RIR', COLS.rir)}
     </View>
   );
 }
 
-export function SetRow({ workingNumber, set, prev, targetMax, load = 'weight', perSide = false, active, focusField, onFocus, onNotes, onLongPress }: Props) {
+export function SetRow({ workingNumber, set, prev, targetMax, load = 'weight', unit, perSide = false, active, focusField, onFocus, onNotes, onLongPress }: Props) {
   const t = useTheme();
   const warm = set.type === 'warmup';
-  const prevText = prev ? `prev ${fmtKg(prev.weight)} × ${prev.reps}${prev.rir != null ? ` @ ${prev.rir}` : ''}${prev.notes ? ` · ${prev.notes}` : ''}` : '';
+  const prevText = prev ? `prev ${unit === 'lb' ? kgToLb(String(prev.weight)) : fmtKg(prev.weight)} × ${prev.reps}${prev.rir != null ? ` @ ${prev.rir}` : ''}${prev.notes ? ` · ${prev.notes}` : ''}` : '';
   const side = perSide && set.reps !== '' ? `${Number(set.reps) / 2} per side` : '';
   const hint = [prevText, active && !warm ? `target ${targetMax}${load === 'time' ? 's' : ''}` : '', side].filter(Boolean).join(' · ');
   const [open, setOpen] = useState(false);

@@ -5,7 +5,7 @@
 
 html, body, #root { margin: 0; height: var(--app-h, 100%); overflow: hidden; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
 body { background: var(--bg); color: var(--text); -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
-input, textarea { -webkit-user-select: text; user-select: text; font: inherit; color: inherit; background: none; border: none; outline: none; padding: 0; }
+input, textarea { position: relative; -webkit-user-select: text; user-select: text; font: inherit; color: inherit; background: none; border: none; outline: none; padding: 0; }
 input::placeholder, textarea::placeholder { color: var(--dim); }
 
 /* Behave like React Native views so ported styles work unchanged. */
@@ -32,6 +32,8 @@ dialog.alert p { color: var(--mute); font-size: 13px; margin: 0 0 16px; white-sp
 dialog.alert button { all: unset; display: block; width: 100%; padding: 12px 0; text-align: center; text-transform: uppercase; letter-spacing: 1px; font-size: 12px; border-top: 1px solid var(--line); cursor: pointer; }
 dialog.alert button[data-style='destructive'] { color: var(--accent); }
 dialog.alert button[data-style='cancel'] { color: var(--mute); }
+dialog.alert input { box-sizing: border-box; width: 100%; margin: 0 0 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; font-size: 16px; outline: none; -webkit-user-select: text; user-select: text; }
+dialog.alert input:focus { border-color: var(--accent); }
 .noscrollbar { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .noscrollbar::-webkit-scrollbar { display: none; }
 .snap-kids > * { scroll-snap-align: start; }
@@ -53,4 +55,39 @@ dialog.alert button[data-style='cancel'] { color: var(--mute); }
 }
 @media (prefers-reduced-motion: reduce) {
   .prc-veil, .prc-card, .prc-dot { animation: prc-fade 160ms ease-out both; }
+}
+dialog.alert.end { width: min(340px, 90vw); }
+dialog.alert.end .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+dialog.alert.end .grid button { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 0 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); font-size: 11px; touch-action: none; }
+dialog.alert.end .grid button[data-style='accent'] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+dialog.alert.end .ring { position: relative; display: flex; }
+dialog.alert.end p.foot { margin: 14px 0 0; text-align: center; font-size: 11px; color: var(--dim); }
+
+/* Finish celebration: wipe and lift run from JS (they need the tap point); dots and text are plain keyframes. */
+.cel { align-items: center; justify-content: center; cursor: pointer; overflow: hidden; }
+.cel-dot { position: absolute; width: 6px; height: 6px; border-radius: 50%; opacity: 0; animation: cel-dot 700ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.cel-rise { display: block; animation: cel-rise 400ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.cel-big { line-height: 1 !important; animation-name: cel-big; animation-duration: 520ms; }
+.cel-tap { animation: cel-tap 300ms ease-out 1300ms both; }
+@keyframes cel-dot { from { opacity: 0; transform: scale(0.4); } 40% { opacity: 0.22; transform: scale(1.4); } to { opacity: 0.12; transform: scale(1); } }
+@keyframes cel-rise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes cel-big { from { opacity: 0; transform: translateY(18px) scale(0.94); filter: blur(4px); } }
+@keyframes cel-tap { from { opacity: 0; } to { opacity: 0.6; } }
+@media (prefers-reduced-motion: reduce) {
+  .cel-rise, .cel-big { animation: prc-fade 160ms ease-out both; }
+}
+
+/* Dialogs grow in from 95%; the exit plays from shut() in lib/alert.ts. End menu tiles follow one after another. */
+dialog.alert[open] { animation: dlg-in 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+dialog.alert[open]::backdrop { animation: prc-fade 200ms ease-out; }
+dialog.alert.end[open] .grid button { animation: dlg-tile 260ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+dialog.alert.end[open] .grid button:nth-child(1) { animation-delay: 60ms; }
+dialog.alert.end[open] .grid button:nth-child(2) { animation-delay: 100ms; }
+dialog.alert.end[open] .grid button:nth-child(3) { animation-delay: 140ms; }
+.rise-in { animation: rise-in 320ms cubic-bezier(0.23, 1, 0.32, 1) 250ms both; }
+@keyframes dlg-in { from { opacity: 0; transform: scale(0.95); } }
+@keyframes dlg-tile { from { opacity: 0; transform: translateY(8px); } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(12px); } }
+@media (prefers-reduced-motion: reduce) {
+  dialog.alert[open], dialog.alert.end[open] .grid button, .rise-in { animation: prc-fade 160ms ease-out both; }
 }

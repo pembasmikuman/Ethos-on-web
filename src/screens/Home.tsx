@@ -2,7 +2,7 @@ import { useCallback, useState, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from '../rn';
 import { Redirect, router, useFocusEffect } from '../lib/nav';
 import { useSafeAreaInsets } from '../lib/insets';
-import { allSessions, listRoutines, recentSessions, setsSince, type Routine } from '../db/queries';
+import { allSessions, dayName, listRoutines, recentSessions, setsSince, type Routine } from '../db/queries';
 import { daysAgo, heatmap, upNext, weeklyVolume, weekStart } from '../lib/progression';
 import { Heatmap } from '../components/Heatmap';
 import { DotBars } from '../components/DotBars';
@@ -171,16 +171,20 @@ export default function Home() {
         <Pressable onPress={() => router.push('/routines')} hitSlop={12}><Label color={t.accent}>Edit</Label></Pressable>
       </View>
       {routines.length === 0 && <Label color={t.dim} style={{ paddingHorizontal: 4 }}>No routines. Tap Edit to build one.</Label>}
-      {[...new Set(routines.map((r) => r.plan))].map((plan) => (
+      {[...new Set(routines.map((r) => r.plan))].map((plan) => {
+        const days = routines.filter((r) => r.plan === plan);
+        // A routine that is one unnamed day would show its name twice; the day row carries it alone.
+        const head = plan !== '' && !(days.length === 1 && !days[0].name);
+        return (
         <View key={plan || '~'} style={[s.card, { backgroundColor: t.card, borderColor: t.line }]}>
-          {plan !== '' && <Doto size={28} style={{ paddingBottom: 6 }}>{plan.toUpperCase()}</Doto>}
-          {routines.filter((r) => r.plan === plan).map((r) => {
+          {head && <Doto size={28} style={{ paddingBottom: 6 }}>{plan.toUpperCase()}</Doto>}
+          {days.map((r) => {
             const ago = daysAgo(r.last_done);
             const next = nextIds.has(r.id);
             return (
               <Pressable key={r.id} onPress={() => go(r)} style={({ pressed }) => [s.day, { borderColor: next ? t.accent : t.line, opacity: pressed ? 0.8 : 1 }]}>
                 <View style={{ flex: 1, gap: 3 }}>
-                  <Doto size={plan ? 20 : 26}>{r.name.toUpperCase()}</Doto>
+                  <Doto size={head ? 20 : 26}>{dayName(r).toUpperCase()}</Doto>
                   <Label color={next ? t.accent : t.dim}>{next ? 'Up next · ' : ''}{ago === null ? 'never done' : ago === 0 ? 'today' : `${ago}d ago`}</Label>
                 </View>
                 <Label color={t.accent}>{active ? 'Resume' : 'Preview'}</Label>
@@ -188,7 +192,8 @@ export default function Home() {
             );
           })}
         </View>
-      ))}
+        );
+      })}
 
       <Pressable onPress={free} style={({ pressed }) => [s.free, { borderColor: t.line, opacity: pressed ? 0.7 : 1 }]}>
         <Label color={t.accent}>{active ? 'Resume workout' : '+ Empty workout'}</Label>

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import { navState, router, type Move } from './nav';
 
 // iPhone stack motion: a new screen slides in from the right while the one under it drifts a third as far
@@ -27,6 +27,20 @@ export function useSlides(box: RefObject<HTMLElement | null>, move: Move | null,
     moving.onfinish = () => router.settle(move);
     return () => { moving.cancel(); under.cancel(); };
   }, [move]);
+}
+
+/** A screen change with no slide (dock tab switch, replace): a short fade and 6px rise of the new screen.
+ *  Sideways motion is kept for going deeper; tabs switch often, so this stays quick. */
+export function useTabFade(box: RefObject<HTMLElement | null>, move: Move | null, topK: number): void {
+  const prev = useRef(topK);
+  useLayoutEffect(() => {
+    const was = prev.current;
+    prev.current = topK;
+    const top = screen(box, topK);
+    if (move || was === topK || !top) return;
+    const a = top.animate(reduced() ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 160, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
+    return () => a.cancel();
+  }, [topK, move]);
 }
 
 /** Drag from the left edge to go back, following the finger. Past 40% of the width, or flicked, it goes back;

@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { fmtClock, fmtKg, applyKey } from '../lib/format';
+import { fmtClock, fmtKg, applyKey, kgToLb, lbToKg } from '../lib/format';
 
 test('fmtClock', () => {
   expect(fmtClock(107)).toBe('1:47');
@@ -26,4 +26,12 @@ test('applyKey', () => {
   expect(applyKey('100', 'lb')).toBe('45.4');
   expect(applyKey('45', 'lb')).toBe('20.4');
   expect(applyKey('', 'lb')).toBe('');
+});
+
+test('kgToLb / lbToKg', () => {
+  expect(kgToLb('45')).toBe('99.2');
+  expect(lbToKg(kgToLb('45'))).toBe('45');
+  expect(lbToKg('100')).toBe('45.4');
+  expect(lbToKg('10.')).toBe('4.5');
+  expect(kgToLb('')).toBe('');
 });

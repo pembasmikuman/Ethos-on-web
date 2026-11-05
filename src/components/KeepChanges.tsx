@@ -31,6 +31,7 @@ export function KeepChanges({ sessionId, focused }: { sessionId: string; focused
     setOffer(null);
   };
   return (
+    <div className="rise-in">
     <View style={[s.card, { backgroundColor: t.card, borderColor: t.accent }]}>
       <Doto size={20}>{`UPDATE ${offer.routineName.toUpperCase()}`}</Doto>
       {offer.changes.map((c, i) => (
@@ -48,6 +49,7 @@ export function KeepChanges({ sessionId, focused }: { sessionId: string; focused
         </Pressable>
       </View>
     </View>
+    </div>
   );
 }
 

@@ -41,3 +41,31 @@ test('a heavier working set than ever raises the PR card', async () => {
   expect(w().pr).toMatchObject({ kind: 'weight', from: 60, to: 65, month: 1 });
   await w().skipRest();
 });
+
+test('a set typed in lb is logged in kg, and toggling back shows kg', async () => {
+  const { useWorkout } = await import('../store/workout');
+  const { sessionSets } = await import('../db/queries');
+  const w = () => useWorkout.getState();
+  w().toggleUnit();
+  expect(w().blocks[0].unit).toBe('lb');
+  for (const [f, v] of [['weight', '100'], ['reps', '8']] as const) { w().setFocus(2, f); w().input(v); }
+  await w().completeSet();
+  const logged = (await sessionSets(w().sessionId!)).find((x) => x.reps === 8 && x.weight !== 60 && x.weight !== 65);
+  expect(logged?.weight).toBe(45.4);
+  w().toggleUnit();
+  expect(w().blocks[0].unit).toBeUndefined();
+  expect(w().blocks[0].sets[2].weight).toBe('45.4');
+  expect(w().blocks[0].sets[0].weight).toBe('60'); // kg → lb → kg lands back where it was
+  await w().skipRest();
+});
+
+test('a rest can be started without logging a set', async () => {
+  const { useWorkout } = await import('../store/workout');
+  const w = () => useWorkout.getState();
+  const done = w().blocks.flatMap((b) => b.sets).filter((x) => x.done).length;
+  w().startRest(300);
+  expect(w().rest?.total).toBe(300);
+  expect(w().rest!.endsAt - Date.now()).toBeGreaterThan(299_000);
+  expect(w().blocks.flatMap((b) => b.sets).filter((x) => x.done).length).toBe(done);
+  await w().skipRest();
+});

@@ -2,18 +2,29 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { kv } from '../db/kv';
 import type { Exercise } from '../db';
-import { deleteSession, finishSession, insertSet, prSets, setSetNotes as saveSetNotes, recentExerciseSessions, routineExercises, startSession, type LoggedSet, type Routine, setExerciseNotes } from '../db/queries';
+import { dayName, deleteSession, finishSession, insertSet, prSets, setSetNotes as saveSetNotes, recentExerciseSessions, routineExercises, startSession, type LoggedSet, type Routine, setExerciseNotes } from '../db/queries';
 import { findPR, nextWeight, prCountSince, stalled, warmupRamp, type PR } from '../lib/progression';
 import { cancelRestDone, ensurePush, scheduleRestDone } from '../lib/rest';
-import { fmtKg } from '../lib/format';
+import { fmtKg, kgToLb, lbToKg } from '../lib/format';
 import { routineChanges, type PlanRow } from '../lib/routineChanges';
 import { useUi } from './ui';
 
 export type Field = 'weight' | 'reps' | 'rir';
 /** `logId`: the logged_sets row once done, so a note typed afterwards still reaches it. `notes` may be missing on drafts saved before notes existed. */
 export type SetDraft = { id: number; type: 'warmup' | 'working'; weight: string; reps: string; rir: string; notes?: string; done: boolean; logId?: string };
-/** `reId`: the routine row this block stands in for, none when added this session. `replaced`: swapped out after sets were logged, kept only to show them. */
-export type ExerciseBlock = { exercise: Exercise; sets: SetDraft[]; prev: LoggedSet[]; overload: boolean; deload: boolean; why: string; stalled: boolean; reId?: string; replaced?: boolean };
+/** `reId`: the routine row this block stands in for, none when added this session. `replaced`: swapped out after sets were logged, kept only to show them.
+ *  `unit`: 'lb' while this exercise's weights are typed and shown in lb (kg when missing). The DB always gets kg. */
+export type ExerciseBlock = { exercise: Exercise; sets: SetDraft[]; prev: LoggedSet[]; overload: boolean; deload: boolean; why: string; stalled: boolean; reId?: string; replaced?: boolean; unit?: 'lb' };
+/** The block's weights in kg, whatever unit they are shown in. */
+const inKg = (b: ExerciseBlock) => (b.unit === 'lb' ? b.sets.map((x) => ({ ...x, weight: lbToKg(x.weight) })) : b.sets);
+
+/** Finish-screen numbers: minutes since start, logged working sets, and kg moved (weight x reps over those sets). */
+export function sessionStats(blocks: ExerciseBlock[], startedAt: number, now = Date.now()) {
+  const sets = blocks.flatMap((b) => inKg(b).filter((x) => x.done && x.type === 'working'));
+  const kg = sets.reduce((n, x) => n + (parseFloat(x.weight) || 0) * (parseInt(x.reps, 10) || 0), 0);
+  return { mins: Math.max(0, Math.round((now - startedAt) / 60000)), sets: sets.length, kg: Math.round(kg) };
+}
+export type Cheer = ReturnType<typeof sessionStats> & { title: string; x: number; y: number };
 
 type State = {
   sessionId: string | null;
@@ -28,6 +39,8 @@ type State = {
   rest: { endsAt: number; total: number } | null;
   /** The PR the last set hit, for the card. `month`: PRs so far this month, this one included. Not persisted. */
   pr: (PR & { exercise: string; month: number }) | null;
+  /** The finish celebration, from the screen point `x, y` where Finish was tapped. Not persisted. */
+  cheer: Cheer | null;
 
   /** Load routine into a preview. No DB session, no clock. */
   preview: (routine: Routine) => Promise<void>;
@@ -42,18 +55,24 @@ type State = {
   setExercise: (i: number) => void;
   setFocus: (setIdx: number, field: Field) => void;
   input: (value: string) => void;
+  /** Flip the current exercise between kg and lb, converting every set's weight. */
+  toggleUnit: () => void;
   addSet: (type?: 'warmup' | 'working') => void;
   removeSet: (setIdx: number) => void;
   /** Note on one set (by draft id), in any exercise. Saved to the DB too if the set is already logged. */
   setSetNote: (id: number, notes: string) => void;
   completeSet: () => Promise<void>;
+  /** Start a rest timer without logging a set: a walk to the next machine, a stretch. Replaces any rest running. */
+  startRest: (seconds: number) => void;
   adjustRest: (deltaSeconds: number) => Promise<void>;
   skipRest: () => Promise<void>;
   /** Rest ran out on its own. Clears the timer but leaves the scheduled alert alone,
    *  so the bell still rings instead of being cancelled a moment before it fires. */
   restDone: () => void;
   dismissPR: () => void;
-  finish: () => Promise<string | null>;
+  dismissCheer: () => void;
+  /** End and save the session. `at`: where Finish was tapped, to start the celebration there. */
+  finish: (at?: { x: number; y: number }) => Promise<string | null>;
   setNotes: (exerciseId: string, notes: string) => Promise<void>;
   cancel: () => Promise<void>;
 };
@@ -91,13 +110,14 @@ export const useWorkout = create<State>()(
   focus: { setIdx: 0, field: 'weight' },
   rest: null,
   pr: null,
+  cheer: null,
 
   async preview(routine) {
     const exs = await routineExercises(routine.id);
     const blocks: ExerciseBlock[] = [];
     for (const ex of exs) blocks.push({ ...(await buildBlock(ex, ex.target_sets)), reId: ex.re_id });
     const plan = exs.map((ex) => ({ reId: ex.re_id, exerciseId: ex.id, name: ex.name, sets: ex.target_sets }));
-    set({ sessionId: null, routine, plan, title: routine.plan ? `${routine.plan} · ${routine.name}` : routine.name, startedAt: 0, blocks, exIdx: 0, focus: { setIdx: 0, field: 'weight' }, rest: null });
+    set({ sessionId: null, routine, plan, title: routine.plan && routine.name ? `${routine.plan} · ${routine.name}` : dayName(routine), startedAt: 0, blocks, exIdx: 0, focus: { setIdx: 0, field: 'weight' }, rest: null });
   },
 
   async begin() {
@@ -154,15 +174,24 @@ export const useWorkout = create<State>()(
     set({ blocks: next });
   },
 
+  toggleUnit() {
+    const { blocks, exIdx } = get();
+    const b = blocks[exIdx];
+    const to = b.unit === 'lb' ? lbToKg : kgToLb;
+    const next = { ...b, unit: b.unit === 'lb' ? undefined : ('lb' as const), sets: b.sets.map((x) => ({ ...x, weight: to(x.weight) })) };
+    set({ blocks: blocks.map((x, i) => (i === exIdx ? next : x)) });
+  },
+
   addSet(type = 'working') {
     const { blocks, exIdx } = get();
     const b = blocks[exIdx];
     const last = b.sets[b.sets.length - 1];
     let sets: SetDraft[];
     if (type === 'warmup') {
-      const top = parseFloat(b.sets.find((x) => x.type === 'working')?.weight ?? '');
+      const top = parseFloat(inKg(b).find((x) => x.type === 'working')?.weight ?? '');
       const ramp = Number.isNaN(top) ? [] : warmupRamp(top);
-      const warm = ramp.length ? ramp.map((r) => ({ ...emptySet(fmtKg(r.weight), 'warmup'), reps: String(r.reps) })) : [emptySet('', 'warmup')];
+      const shown = (kg: number) => (b.unit === 'lb' ? kgToLb(String(kg)) : fmtKg(kg));
+      const warm = ramp.length ? ramp.map((r) => ({ ...emptySet(shown(r.weight), 'warmup'), reps: String(r.reps) })) : [emptySet('', 'warmup')];
       sets = [...warm, ...b.sets.filter((x) => x.type !== 'warmup' || x.done)];
     } else {
       sets = [...b.sets, emptySet(last?.weight ?? '')];
@@ -192,7 +221,7 @@ export const useWorkout = create<State>()(
     if (!sessionId) return;
     const b = blocks[exIdx];
     const s = b.sets[focus.setIdx];
-    const weight = parseFloat(s.weight);
+    const weight = parseFloat(inKg(b)[focus.setIdx].weight);
     const reps = parseInt(s.reps, 10);
     if (Number.isNaN(weight) || Number.isNaN(reps)) return;
     const workingBefore = b.sets.slice(0, focus.setIdx).filter((x) => x.type === 'working').length;
@@ -209,16 +238,20 @@ export const useWorkout = create<State>()(
     // Re-read: a note may have been typed while the insert was in flight.
     const sets = get().blocks[exIdx].sets.map((x, i) => (i === focus.setIdx ? { ...x, done: true, logId } : x));
     const nextIdx = sets.findIndex((x, i) => i > focus.setIdx && !x.done);
-    const total = b.exercise.default_rest_seconds;
-    const endsAt = Date.now() + total * 1000;
     set({
       blocks: get().blocks.map((x, i) => (i === exIdx ? { ...x, sets } : x)),
       focus: { setIdx: nextIdx === -1 ? focus.setIdx : nextIdx, field: nextIdx === -1 ? focus.field : 'reps' },
-      rest: { endsAt, total },
     });
+    get().startRest(b.exercise.default_rest_seconds);
+    if (s.type === 'working' && b.exercise.load !== 'time') void checkPR(b.exercise, logId);
+  },
+
+  startRest(total) {
+    ensurePush(); // inside the tap, for the iOS permission prompt
+    const endsAt = Date.now() + total * 1000;
+    set({ rest: { endsAt, total } });
     // A new schedule replaces the device's pending alarm on the server, so no cancel first.
     void scheduleRestDone(endsAt);
-    if (s.type === 'working' && b.exercise.load !== 'time') void checkPR(b.exercise, logId);
   },
 
   async adjustRest(delta) {
@@ -233,6 +266,10 @@ export const useWorkout = create<State>()(
 
   restDone() {
     set({ rest: null });
+  },
+
+  dismissCheer() {
+    set({ cheer: null });
   },
 
   dismissPR() {
@@ -257,15 +294,17 @@ export const useWorkout = create<State>()(
     set({ blocks: get().blocks.map((b) => (b.exercise.id === exerciseId ? { ...b, exercise: { ...b.exercise, notes } } : b)) });
   },
 
-  async finish() {
-    const { sessionId, rest, routine, plan, blocks } = get();
+  async finish(at) {
+    const { sessionId, rest, routine, plan, blocks, startedAt, title } = get();
+    // Before any await, so the celebration starts on the tap.
+    if (sessionId && at) set({ cheer: { ...sessionStats(blocks, startedAt), title, ...at } });
     if (rest) void cancelRestDone();
     if (sessionId) await finishSession(sessionId);
     // Hand what changed against the routine to the summary screen, which offers to keep it.
     if (sessionId && routine && plan) {
-      const lite = blocks.map((b) => ({ reId: b.reId, replaced: b.replaced, exerciseId: b.exercise.id, name: b.exercise.name, sets: b.sets }));
+      const lite = blocks.map((b) => ({ reId: b.reId, replaced: b.replaced, exerciseId: b.exercise.id, name: b.exercise.name, sets: inKg(b) }));
       const changes = routineChanges(plan, lite);
-      if (changes.length) useUi.getState().setPendingChanges({ sessionId, routineId: routine.id, routineName: routine.name, changes, order: lite.filter((b) => !b.replaced) });
+      if (changes.length) useUi.getState().setPendingChanges({ sessionId, routineId: routine.id, routineName: dayName(routine), changes, order: lite.filter((b) => !b.replaced) });
     }
     set({ sessionId: null, routine: null, plan: null, blocks: [], rest: null });
     return sessionId;

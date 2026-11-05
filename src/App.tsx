@@ -5,11 +5,12 @@ import { matchRoute, router, ScreenContext, TAB_ROOT, useNav, type Tab } from '.
 import { useScheme, useTheme } from './lib/theme';
 import { Dock } from './components/Dock';
 import { PRCard } from './components/PRCard';
+import { Celebration } from './components/Celebration';
 import { useWorkout } from './store/workout';
 import { useWakeLock } from './lib/wakeLock';
 import { useRestAlarm } from './lib/restAlarm';
 import { unlockAudio } from './lib/bell';
-import { useEdgeSwipe, useSlides } from './lib/slide';
+import { useEdgeSwipe, useSlides, useTabFade } from './lib/slide';
 
 export function App() {
   const nav = useNav();
@@ -39,6 +40,7 @@ export function App() {
   const m = nav.move;
   const topK = nav.stacks[nav.tab].at(-1)!.k;
   useSlides(box, m, topK);
+  useTabFade(box, m, topK);
   useEdgeSwipe(box);
   // A screen that was just popped stays on the page, in its old place, while it slides away.
   const tabs = Object.keys(TAB_ROOT) as Tab[];
@@ -53,6 +55,7 @@ export function App() {
       )}
       <Dock />
       <PRCard />
+      <Celebration />
     </div>
   );
 }

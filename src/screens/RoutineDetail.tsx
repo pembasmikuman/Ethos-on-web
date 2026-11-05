@@ -64,7 +64,8 @@ export default function RoutineEditor() {
       <TextInput
         value={name}
         onChangeText={setName}
-        onEndEditing={() => renameRoutine(id, name.trim() || 'Untitled', plan.trim())}
+        onBlur={() => renameRoutine(id, name.trim(), plan.trim())}
+        placeholder={plan || 'Untitled'}
         selectTextOnFocus
         returnKeyType="done"
         style={[s.name, { color: t.text, borderBottomColor: t.line }]}

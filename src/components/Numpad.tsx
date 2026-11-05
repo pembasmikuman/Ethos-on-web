@@ -6,6 +6,8 @@ type Props = {
   onKey: (key: string) => void;
   onDone: () => void;
   doneLabel?: string;
+  /** Show the lb→kg key. Off while the weights are already in lb. */
+  lbKey?: boolean;
 };
 
 const ROWS: [string, string][][] = [
@@ -14,7 +16,7 @@ const ROWS: [string, string][][] = [
   [['1', '1'], ['2', '2'], ['3', '3'], ['⌫', 'del']],
 ];
 
-export function Numpad({ onKey, onDone, doneLabel = 'Done · Start rest' }: Props) {
+export function Numpad({ onKey, onDone, doneLabel = 'Done · Start rest', lbKey = true }: Props) {
   const t = useTheme();
   const key = (label: string, value: string, sub = false, style?: ViewStyle) => (
     <Pressable
@@ -37,12 +39,12 @@ export function Numpad({ onKey, onDone, doneLabel = 'Done · Start rest' }: Prop
       <View style={s.row}>
         {key('0', '0')}
         {key('.', '.', true)}
-        <Pressable
+        {lbKey && <Pressable
           onPress={() => onKey('lb')}
           style={({ pressed }) => [s.key, { borderColor: t.line, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
         >
           <Label color={t.mute} size={11} style={{ letterSpacing: 0.5 }}>lb→kg</Label>
-        </Pressable>
+        </Pressable>}
         <Pressable
           onPress={onDone}
           style={({ pressed }) => [s.key, s.done, { backgroundColor: t.accent, transform: [{ scale: pressed ? 0.97 : 1 }] }]}

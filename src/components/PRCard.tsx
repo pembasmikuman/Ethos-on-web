@@ -23,7 +23,7 @@ const GAP = 8;
 const SHOW_MS = 3200;
 
 /** Eased count from `from` to `to`, starting after `delay`. Jumps straight to `to` when `still`. */
-function useCount(from: number, to: number, still: boolean, delay = 320, ms = 900) {
+export function useCount(from: number, to: number, still: boolean, delay = 320, ms = 900) {
   const [v, setV] = useState(still ? to : from);
   useEffect(() => {
     if (still) { setV(to); return; }

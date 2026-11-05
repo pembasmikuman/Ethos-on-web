@@ -6,6 +6,8 @@ import { getSetup, storeSetup, type Setup } from '../lib/setup';
 const EX = (a: string) => `${a}.id, ${a}.name AS base, CASE WHEN ${a}.brand <> '' THEN ${a}.name || ' · ' || ${a}.brand ELSE ${a}.name END AS name, ${a}.brand, ${a}.movement, ${a}.primary_muscle, ${a}.secondary_muscles, ${a}.equipment, ${a}.default_rest_seconds, ${a}.target_rep_min, ${a}.target_rep_max, ${a}.increment_kg, ${a}.library_id, ${a}.progression, ${a}.load, ${a}.per_side, ${a}.notes, ${a}.tuned`;
 
 export type Routine = { id: string; name: string; plan: string; plan_order: number; exercises: number; last_done: string | null };
+/** A day may have no name of its own (a routine that is the same every day); it goes by its routine's name then. */
+export const dayName = (r: Pick<Routine, 'name' | 'plan'>) => r.name || r.plan || 'Untitled';
 export type LoggedSet = {
   id: string;
   session_id: string;
@@ -53,7 +55,7 @@ export async function prevSets(exerciseId: string): Promise<LoggedSet[]> {
 }
 
 /** A null routine starts a session that follows no routine, under `title`. */
-export async function startSession(routine: Routine | null, title = routine?.name ?? ''): Promise<string> {
+export async function startSession(routine: Routine | null, title = routine ? dayName(routine) : ''): Promise<string> {
   const db = await getDb();
   const id = crypto.randomUUID();
   await db.runAsync(
@@ -170,6 +172,20 @@ export async function sessionSets(sessionId: string) {
     `SELECT l.*, CASE WHEN e.brand <> '' THEN e.name || ' · ' || e.brand ELSE e.name END AS name, e.target_rep_max, e.primary_muscle, e.secondary_muscles, e.notes FROM logged_sets l JOIN exercises e ON e.id = l.exercise_id
      WHERE l.session_id = ? ORDER BY l.completed_at`,
     [sessionId],
+  );
+}
+
+export type ExportSet = LoggedSet & { notes: string; exercise: string; primary_muscle: string; secondary_muscles: string; target_rep_min: number; target_rep_max: number; default_rest_seconds: number; increment_kg: number; progression: Progression; load: Load; per_side: number; exercise_notes: string };
+
+/** Every set of these sessions with what the export needs about its exercise, in logged order. */
+export async function exportSets(sessionIds: string[]): Promise<ExportSet[]> {
+  const db = await getDb();
+  return db.getAllAsync<ExportSet>(
+    `SELECT l.*, CASE WHEN e.brand <> '' THEN e.name || ' · ' || e.brand ELSE e.name END AS exercise, e.primary_muscle, e.secondary_muscles,
+       e.target_rep_min, e.target_rep_max, e.default_rest_seconds, e.increment_kg, e.progression, e.load, e.per_side, e.notes AS exercise_notes
+     FROM logged_sets l JOIN exercises e ON e.id = l.exercise_id
+     WHERE l.session_id IN (${sessionIds.map(() => '?').join(',')}) ORDER BY l.completed_at`,
+    sessionIds,
   );
 }
 
