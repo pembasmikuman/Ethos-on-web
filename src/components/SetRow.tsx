@@ -58,14 +58,14 @@ export function SetRow({ workingNumber, set, prev, targetMax, load = 'weight', u
     const v = set[field];
     const focused = active && focusField === field;
     return (
-      <Pressable onPress={() => onFocus(field)} style={[s.box, { flex, borderColor: focused ? t.accent : t.line, backgroundColor: focused ? t.warnBg : t.bg }]}>
+      <Pressable onPress={() => onFocus(field)} style={[s.box, { flex, borderColor: focused ? t.accent : t.line, backgroundColor: focused ? t.card : t.bg }]}>
         <Doto size={22} color={focused ? t.accent : v === '' ? t.dim : set.done || active ? t.text : t.mute}>{v === '' ? '–' : v}</Doto>
       </Pressable>
     );
   };
 
   return (
-    <Pressable onLongPress={onLongPress} style={[s.row, { backgroundColor: t.card }]}>
+    <Pressable onLongPress={onLongPress} style={[s.row, { backgroundColor: active ? t.warnBg : t.card, transition: 'background-color 200ms ease' }]}>
       <View style={s.line}>
         <View style={[s.num, { borderColor: ring, backgroundColor: set.done ? t.accent : 'transparent' }]}>
           <Label size={12} color={set.done ? t.bg : ring} style={{ letterSpacing: 0 }}>{warm ? 'W' : String(workingNumber)}</Label>
@@ -90,7 +90,7 @@ export function SetRow({ workingNumber, set, prev, targetMax, load = 'weight', u
 }
 
 const s = StyleSheet.create({
-  row: { gap: 4, paddingVertical: 4 },
+  row: { gap: 4, paddingVertical: 6, paddingHorizontal: 6, marginHorizontal: -6, borderRadius: 12 },
   line: { flexDirection: 'row', alignItems: 'center', gap: COLS.gap },
   num: { width: COLS.num, height: COLS.num, borderRadius: COLS.num / 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   box: { flexBasis: 0, height: 46, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

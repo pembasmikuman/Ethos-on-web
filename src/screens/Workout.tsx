@@ -40,9 +40,9 @@ function HeaderClock({ onFinish }: { onFinish: () => void }) {
   );
 }
 
-type PageProps = { block: ExerciseBlock; focus: { setIdx: number; field: Field } | null; onEdit: () => void };
+type PageProps = { block: ExerciseBlock; focus: { setIdx: number; field: Field } | null; onEdit: () => void; hasNext: boolean };
 
-const ExercisePage = memo(function ExercisePage({ block, focus, onEdit }: PageProps) {
+const ExercisePage = memo(function ExercisePage({ block, focus, onEdit, hasNext }: PageProps) {
   const t = useTheme();
   const { addSet, removeSet, setFocus, setNotes, setSetNote, toggleUnit } = useWorkout.getState();
   let working = 0;
@@ -74,6 +74,9 @@ const ExercisePage = memo(function ExercisePage({ block, focus, onEdit }: PagePr
         </View>
       )}
       <ScrollView style={{ flex: 1 }}>
+        <View style={{ paddingBottom: hasNext ? 10 : 0 }}>
+        {/* The next exercise, tucked behind this one: the stack says there's more below. */}
+        {hasNext && <View style={[s.peek, { backgroundColor: t.card, borderColor: t.line }]} />}
         <View style={[s.card, { backgroundColor: t.card, borderColor: t.line }]}>
         <SetHeader load={block.exercise.load} unit={block.unit} onUnit={toggleUnit} />
         {block.sets.map((set, i) => {
@@ -98,6 +101,7 @@ const ExercisePage = memo(function ExercisePage({ block, focus, onEdit }: PagePr
             </Swipe>
           );
         })}
+        </View>
         </View>
         <View style={s.actions}>
           <Pressable onPress={() => addSet('warmup')} hitSlop={8}><Label color={t.warm}>+ Warmups</Label></Pressable>
@@ -124,6 +128,7 @@ export default function Workout() {
   const pager = useRef<ScrollViewHandle>(null);
   const shown = useRef(exIdx);
   const openPad = useCallback(() => setPadOpen(true), []);
+  const grab = useRef<number | null>(null);
 
   // Realign the visible page after every commit: exIdx changed elsewhere (overview,
   // prev/next), or pageH changed because the keypad opened or closed. Has to run as an
@@ -141,7 +146,7 @@ export default function Workout() {
   const onKey = (k: string) => {
     if (!focusedSet) return;
     const max = focus.field === 'weight' ? 5 : 2;
-    if ((k === '+' || k === '-' || k === '.' || k === 'lb') && focus.field !== 'weight') return;
+    if ((k === '+' || k === '-' || k === '.') && focus.field !== 'weight') return;
     useWorkout.getState().input(applyKey(focusedSet[focus.field], k, max));
   };
   const nextField = (): 'reps' | 'rir' | null => {
@@ -204,7 +209,7 @@ export default function Workout() {
       >
         {blocks.map((b, bi) => (
           <View key={b.exercise.id + bi} style={{ height: pageH || undefined, paddingRight: 14, overflow: 'hidden' }}>
-            <ExercisePage block={b} focus={bi === exIdx ? focus : null} onEdit={openPad} />
+            <ExercisePage block={b} focus={bi === exIdx ? focus : null} onEdit={openPad} hasNext={bi < blocks.length - 1} />
           </View>
         ))}
       </ScrollView>
@@ -212,19 +217,30 @@ export default function Workout() {
         {blocks.map((b, i) => <View key={i} style={{ width: 6, height: i === exIdx ? 14 : 6, borderRadius: 3, backgroundColor: i === exIdx ? t.accent : b.sets.length > 0 && b.sets.every((x) => x.done) ? t.green : t.dim }} />)}
       </View>
 
-      <View style={s.nav}>
-        <Label color={t.dim} numberOfLines={1} style={{ flex: 1 }}>
-          {blocks[exIdx + 1] ? `↓ Next · ${blocks[exIdx + 1].exercise.name}` : 'Last exercise'}
-        </Label>
-        <Pressable onPress={onRest} hitSlop={10} style={[s.chip, { borderColor: t.accent }]}>
-          <Label color={t.accent}>◷ Rest</Label>
-        </Pressable>
-        <Pressable onPress={() => setPadOpen(!padOpen)} hitSlop={10}>
-          <Label color={t.accent}>{padOpen ? 'Hide keypad ⌄' : 'Keypad ⌃'}</Label>
-        </Pressable>
+      {/* The deck: everything you press between sets, raised off the page and running under the dock. */}
+      <View style={[s.deck, { backgroundColor: t.card, borderColor: t.line, marginBottom: -(insets.bottom + DOCK_HEIGHT), paddingBottom: insets.bottom + DOCK_HEIGHT + 10 }]}>
+        <div
+          onPointerDown={(e) => { grab.current = e.clientY; }}
+          // Tap the grip to toggle, or drag it: down hides, up shows. The Hide/Keypad label does the same for keyboards.
+          onPointerUp={(e) => { const dy = e.clientY - (grab.current ?? e.clientY); grab.current = null; setPadOpen(Math.abs(dy) > 24 ? dy < 0 : !padOpen); }}
+          aria-hidden
+          style={{ alignSelf: 'stretch', alignItems: 'center', paddingTop: 10, paddingBottom: 14, marginTop: -10, marginBottom: -6, cursor: 'pointer', touchAction: 'none' }}
+        >
+          <View style={[s.grip, { backgroundColor: t.line }]} />
+        </div>
+        <View style={s.nav}>
+          <Label color={t.mute} numberOfLines={1} style={{ flex: 1 }}>
+            {blocks[exIdx + 1] ? `↓ Next · ${blocks[exIdx + 1].exercise.name}` : 'Last exercise'}
+          </Label>
+          <Pressable onPress={onRest} hitSlop={10} style={[s.chip, { borderColor: t.accent }]}>
+            <Label color={t.accent}>◷ Rest</Label>
+          </Pressable>
+          <Pressable onPress={() => setPadOpen(!padOpen)} hitSlop={10}>
+            <Label color={t.accent}>{padOpen ? 'Hide ⌄' : 'Keypad ⌃'}</Label>
+          </Pressable>
+        </View>
+        {padOpen && <div className="deck-in"><Numpad onKey={onKey} onDone={onDone} doneLabel={doneLabel} surface="card" /></div>}
       </View>
-
-      {padOpen && <Numpad onKey={onKey} onDone={onDone} doneLabel={doneLabel} lbKey={block.unit !== 'lb'} />}
       {trends && <TrendSheet block={block} onClose={() => setTrends(false)} onSwap={() => router.push('/routines/pick?session=swap')} onAdd={() => router.push('/routines/pick?session=add')} />}
       <EndMenu open={ending} onClose={() => setEnding(false)} done={doneSets} total={totalSets} />
     </View>
@@ -235,6 +251,9 @@ const s = StyleSheet.create({
   page: { flex: 1, paddingHorizontal: 16, gap: 12 },
   head: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 4, gap: 12 },
   card: { padding: 12, borderRadius: 16, borderWidth: 1, gap: 4 },
+  peek: { position: 'absolute', left: 14, right: 14, top: 12, bottom: 0, borderRadius: 16, borderWidth: 1, opacity: 0.8 },
+  deck: { marginHorizontal: -16, paddingHorizontal: 16, paddingTop: 10, gap: 12, borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  grip: { width: 36, height: 4, borderRadius: 2 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, minHeight: 44 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   actions: { flexDirection: 'row', gap: 24, paddingHorizontal: 12, paddingVertical: 10 },
