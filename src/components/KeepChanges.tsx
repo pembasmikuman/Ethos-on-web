@@ -3,6 +3,7 @@ import { Alert, Pressable, StyleSheet, View } from '../rn';
 import { useTheme } from '../lib/theme';
 import { applyRoutineChanges } from '../db/queries';
 import { useUi, type PendingChanges } from '../store/ui';
+import { useWorkout } from '../store/workout';
 import { Check } from './Check';
 import { Doto, Label } from './Text';
 
@@ -11,19 +12,20 @@ import { Doto, Label } from './Text';
 export function KeepChanges({ sessionId, focused }: { sessionId: string; focused: boolean }) {
   const t = useTheme();
   const pendingChanges = useUi((s) => s.pendingChanges);
+  const cheer = useWorkout((s) => s.cheer);
   const [offer, setOffer] = useState<PendingChanges | null>(null);
   const [picked, setPicked] = useState<boolean[]>([]);
 
-  // Take the offer once, only on the summary of the workout it belongs to.
+  // Take the offer once, only on the summary of the workout it belongs to, after the finish celebration is gone.
   useEffect(() => {
-    if (!focused || pendingChanges?.sessionId !== sessionId) return;
+    if (cheer || !focused || pendingChanges?.sessionId !== sessionId) return;
     const p = pendingChanges;
     useUi.getState().setPendingChanges(null);
     Alert.alert('Keep changes?', `This workout changed ${p.routineName}. Use them next time?`, [
       { text: 'No', style: 'cancel' },
       { text: 'Pick changes', onPress: () => { setOffer(p); setPicked(p.changes.map(() => true)); } },
     ]);
-  }, [focused, pendingChanges, sessionId]);
+  }, [cheer, focused, pendingChanges, sessionId]);
 
   if (!offer) return null;
   const save = async () => {
